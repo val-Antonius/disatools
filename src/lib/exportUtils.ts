@@ -2,6 +2,36 @@
 import { formatDate, formatDateTime, formatTime } from './utils'
 
 // Types for export data
+interface BorrowingItemForExport {
+  item: {
+    name: string
+    category: { name: string }
+  }
+  quantity: number
+  returnedQuantity: number
+}
+
+interface BorrowingForExport {
+  id: string
+  borrowerName: string
+  borrowDate: string
+  returnDate?: string | null
+  purpose: string
+  status: string
+  items: BorrowingItemForExport[]
+}
+
+interface ActivityForExport {
+  id: string
+  type: string
+  description: string
+  item?: {
+    name: string
+    category?: { name: string }
+  } | null
+  createdAt: string
+  metadata?: Record<string, unknown>
+}
 interface ExportBorrowingData {
   id: string
   borrowerName: string
@@ -22,7 +52,7 @@ interface ExportActivityData {
   category: string
   date: string
   time: string
-  metadata?: any
+  metadata?: Record<string, unknown>
 }
 
 interface ExportFilters {
@@ -228,13 +258,13 @@ export const exportToExcel = async (data: ExportBorrowingData[], filters: Export
 }
 
 // Helper function to prepare borrowing data for export
-export const prepareBorrowingDataForExport = (borrowings: any[]): ExportBorrowingData[] => {
+export const prepareBorrowingDataForExport = (borrowings: BorrowingForExport[]): ExportBorrowingData[] => {
   const exportData: ExportBorrowingData[] = []
 
   borrowings.forEach(borrowing => {
     if (borrowing.items && borrowing.items.length > 0) {
       // Multi-item borrowing - create row for each item
-      borrowing.items.forEach((borrowingItem: any) => {
+      borrowing.items.forEach((borrowingItem: BorrowingItemForExport) => {
         exportData.push({
           id: borrowing.id,
           borrowerName: borrowing.borrowerName,
@@ -248,12 +278,13 @@ export const prepareBorrowingDataForExport = (borrowings: any[]): ExportBorrowin
         })
       })
     } else {
-      // Legacy single-item borrowing (fallback)
+      // Legacy single-item borrowing (fallback) - use first item if available
+      const firstItem = borrowing.items?.[0]
       exportData.push({
         id: borrowing.id,
         borrowerName: borrowing.borrowerName,
-        itemName: borrowing.item?.name || 'Unknown Item',
-        category: borrowing.item?.category?.name || 'Unknown Category',
+        itemName: firstItem?.item?.name || 'Unknown Item',
+        category: firstItem?.item?.category?.name || 'Unknown Category',
         borrowDate: formatDate(new Date(borrowing.borrowDate)),
         returnDate: borrowing.returnDate ? formatDate(new Date(borrowing.returnDate)) : null,
         purpose: borrowing.purpose,
@@ -447,7 +478,7 @@ export const exportActivitiesToExcel = async (data: ExportActivityData[], filter
 }
 
 // Helper function to prepare activity data for export
-export const prepareActivityDataForExport = (activities: any[]): ExportActivityData[] => {
+export const prepareActivityDataForExport = (activities: ActivityForExport[]): ExportActivityData[] => {
   return activities.map(activity => ({
     id: activity.id,
     type: activity.type,

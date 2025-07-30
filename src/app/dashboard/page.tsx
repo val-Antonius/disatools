@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Package, AlertTriangle, ArrowRightLeft, Clock, Activity } from 'lucide-react'
-import { DashboardKPI, Activity as ActivityType } from '@/types'
+import { Activity as ActivityType, DashboardData } from '@/types'
 
 const KPICard: React.FC<{
   title: string
@@ -68,7 +68,7 @@ const ActivityItem: React.FC<{
 }
 
 const DashboardPage: React.FC = () => {
-  const [dashboardData, setDashboardData] = useState<any>(null)
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -81,7 +81,7 @@ const DashboardPage: React.FC = () => {
       const response = await fetch('/api/dashboard')
       if (response.ok) {
         const data = await response.json()
-        setDashboardData(data.data)
+        setDashboardData(data.data as DashboardData)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -109,7 +109,12 @@ const DashboardPage: React.FC = () => {
   }
 
   const recentActivities = dashboardData?.recentActivities || []
-  const quickStats = dashboardData?.quickStats || {}
+  const quickStats = dashboardData?.quickStats || {
+    topCategory: null,
+    topLocation: null,
+    todayBorrowings: 0,
+    todayReturns: 0
+  }
 
   return (
     <AppLayout>

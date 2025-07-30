@@ -14,7 +14,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
 
-    const where: any = {}
+    interface WhereClause {
+      OR?: Array<{
+        borrowerName?: { contains: string; mode: 'insensitive' };
+        purpose?: { contains: string; mode: 'insensitive' };
+        item?: { name: { contains: string; mode: 'insensitive' } };
+      }>;
+      status?: BorrowingStatus;
+      itemId?: string;
+      borrowDate?: {
+        gte?: Date;
+        lte?: Date;
+      };
+    }
+
+    const where: WhereClause = {}
 
     if (search) {
       where.OR = [
@@ -24,7 +38,7 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    if (status) {
+    if (status && Object.values(BorrowingStatus).includes(status)) {
       where.status = status
     }
 
@@ -101,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     // Validate each item and check stock
     const itemValidations = await Promise.all(
-      items.map(async (borrowItem: any) => {
+      items.map(async (borrowItem: { itemId: string; quantity: number; notes?: string }) => {
         const { itemId, quantity } = borrowItem
 
         if (!itemId || !quantity || quantity <= 0) {
@@ -117,11 +131,11 @@ export async function POST(request: NextRequest) {
           throw new Error(`Item with ID ${itemId} not found`)
         }
 
-        if (item.stock < parseInt(quantity)) {
+        if (item.stock < quantity) {
           throw new Error(`Insufficient stock for ${item.name}. Available: ${item.stock}, Requested: ${quantity}`)
         }
 
-        return { item, quantity: parseInt(quantity) }
+        return { item, quantity }
       })
     )
 
@@ -139,7 +153,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Create borrowing items and update stock
-      const borrowingItems = await Promise.all(
+      const _borrowingItems = await Promise.all(
         itemValidations.map(async ({ item, quantity }) => {
           // Create borrowing item
           const borrowingItem = await tx.borrowingItem.create({
@@ -148,7 +162,7 @@ export async function POST(request: NextRequest) {
               itemId: item.id,
               quantity,
               status: BorrowingStatus.ACTIVE,
-              notes: items.find((i: any) => i.itemId === item.id)?.notes
+              notes: items.find((i: { itemId: string; quantity: number; notes?: string }) => i.itemId === item.id)?.notes
             }
           })
 

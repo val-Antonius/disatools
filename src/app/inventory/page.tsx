@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import { Plus, Search, Edit, Trash2, Package, AlertTriangle } from 'lucide-react'
-import { ItemStatus, Item, Category, Location } from '@/types'
+import { ItemStatus, Item, Category, Location, ItemFormData } from '@/types'
 
 const getStatusColor = (status: ItemStatus) => {
   switch (status) {
@@ -37,7 +37,7 @@ const InventoryPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(true)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ItemFormData>({
     name: '',
     description: '',
     stock: 0,
@@ -58,7 +58,7 @@ const InventoryPage: React.FC = () => {
       const response = await fetch('/api/items')
       if (response.ok) {
         const data = await response.json()
-        setItems(data.data || [])
+        setItems((data.data as Item[]) || [])
       }
     } catch (error) {
       console.error('Error fetching items:', error)
@@ -72,7 +72,7 @@ const InventoryPage: React.FC = () => {
       const response = await fetch('/api/categories')
       if (response.ok) {
         const data = await response.json()
-        setCategories(data.data || [])
+        setCategories((data.data as Category[]) || [])
       }
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -84,7 +84,7 @@ const InventoryPage: React.FC = () => {
       const response = await fetch('/api/locations')
       if (response.ok) {
         const data = await response.json()
-        setLocations(data.data || [])
+        setLocations((data.data as Location[]) || [])
       }
     } catch (error) {
       console.error('Error fetching locations:', error)

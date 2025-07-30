@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -77,12 +77,7 @@ const CalendarPage: React.FC = () => {
     return days
   }
 
-  // Fetch activities data
-  useEffect(() => {
-    fetchActivities()
-  }, [currentDate])
-
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     setIsLoading(true)
     try {
       // Get first and last day of current month for API call
@@ -99,7 +94,7 @@ const CalendarPage: React.FC = () => {
       const response = await fetch(`/api/activities?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
-        setEvents(data.data || [])
+        setEvents((data.data as ActivityInterface[]) || [])
       }
     } catch (error) {
       console.error('Error fetching activities:', error)
@@ -107,7 +102,12 @@ const CalendarPage: React.FC = () => {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [currentDate])
+
+  // Fetch activities data
+  useEffect(() => {
+    fetchActivities()
+  }, [fetchActivities])
 
   const getEventsForDate = (date: Date) => {
     return events.filter(event => {
@@ -358,10 +358,10 @@ const CalendarPage: React.FC = () => {
                         })}
                       </span>
                     </div>
-                    {event.itemName && (
+                    {event.item?.name && (
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="text-xs text-gray-500">Item:</span>
-                        <span className="text-xs font-medium text-gray-700">{event.itemName}</span>
+                        <span className="text-xs font-medium text-gray-700">{event.item.name}</span>
                       </div>
                     )}
                   </div>
@@ -395,11 +395,11 @@ const CalendarPage: React.FC = () => {
                     </Button>
 
                     {/* Show specific activity type buttons if they exist */}
-                    {selectedDateEvents.some(e => e.type === 'ITEM_BORROWED') && (
+                    {selectedDateEvents.some(e => e.type === ActivityType.ITEM_BORROWED) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport('ITEM_BORROWED')}
+                        onClick={() => handleCreateReport(ActivityType.ITEM_BORROWED)}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
@@ -407,11 +407,11 @@ const CalendarPage: React.FC = () => {
                       </Button>
                     )}
 
-                    {selectedDateEvents.some(e => e.type === 'ITEM_RETURNED') && (
+                    {selectedDateEvents.some(e => e.type === ActivityType.ITEM_RETURNED) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport('ITEM_RETURNED')}
+                        onClick={() => handleCreateReport(ActivityType.ITEM_RETURNED)}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
@@ -419,11 +419,11 @@ const CalendarPage: React.FC = () => {
                       </Button>
                     )}
 
-                    {selectedDateEvents.some(e => e.type === 'STOCK_UPDATED') && (
+                    {selectedDateEvents.some(e => e.type === ActivityType.STOCK_UPDATED) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport('STOCK_UPDATED')}
+                        onClick={() => handleCreateReport(ActivityType.STOCK_UPDATED)}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
@@ -431,11 +431,11 @@ const CalendarPage: React.FC = () => {
                       </Button>
                     )}
 
-                    {selectedDateEvents.some(e => e.type === 'ITEM_ADDED') && (
+                    {selectedDateEvents.some(e => e.type === ActivityType.ITEM_ADDED) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport('ITEM_ADDED')}
+                        onClick={() => handleCreateReport(ActivityType.ITEM_ADDED)}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
@@ -467,20 +467,36 @@ const CalendarPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {mockEvents.slice(0, 5).map(event => (
+              {events.slice(0, 5).map(event => (
                 <div key={event.id} className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg">
                   <div className={`p-2 rounded-full text-white ${getActivityColor(event.type)}`}>
                     {getActivityIcon(event.type)}
                   </div>
                   <div className="flex-1">
-                    <div className="font-medium text-gray-900">{event.title}</div>
-                    <div className="text-sm text-gray-600">{event.description}</div>
+                    <div className="font-medium text-gray-900">{event.description}</div>
+                    {event.item?.name && (
+                      <div className="text-sm text-gray-600">Item: {event.item.name}</div>
+                    )}
                   </div>
                   <div className="text-sm text-gray-500">
-                    {event.date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' })}
+                    {new Date(event.createdAt).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' })}
                   </div>
                 </div>
               ))}
+
+              {events.length === 0 && !isLoading && (
+                <div className="text-center py-8 text-gray-500">
+                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>Belum ada aktivitas terbaru</p>
+                </div>
+              )}
+
+              {isLoading && (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-2">Memuat aktivitas...</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

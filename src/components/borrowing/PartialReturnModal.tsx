@@ -1,39 +1,17 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import { Package, CheckCircle, AlertCircle } from 'lucide-react'
-import { BorrowingStatus } from '@/types'
-
-interface BorrowingItem {
-  id: string
-  item: {
-    id: string
-    name: string
-    category: { name: string }
-  }
-  quantity: number
-  returnedQuantity: number
-  status: BorrowingStatus
-}
-
-interface Borrowing {
-  id: string
-  borrowerName: string
-  purpose: string
-  borrowDate: Date
-  expectedReturnDate: Date
-  status: BorrowingStatus
-  items: BorrowingItem[]
-}
+import { Borrowing, BorrowingStatus, ReturnData } from '@/types'
 
 interface PartialReturnModalProps {
   isOpen: boolean
   onClose: () => void
   borrowing: Borrowing | null
-  onReturn: (borrowingId: string, returnData: any) => void
+  onReturn: (borrowingId: string, returnData: ReturnData) => void
   isLoading?: boolean
 }
 
@@ -53,7 +31,7 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
 
   // Initialize return items when borrowing changes
   React.useEffect(() => {
-    if (borrowing) {
+    if (borrowing && borrowing.items) {
       const initialReturnItems = borrowing.items
         .filter(item => item.status === BorrowingStatus.ACTIVE)
         .map(item => ({
@@ -64,34 +42,34 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
     }
   }, [borrowing])
 
-  if (!borrowing) return null
+  if (!borrowing || !borrowing.items) return null
 
   const activeItems = borrowing.items.filter(item => item.status === BorrowingStatus.ACTIVE)
   const totalItemsToReturn = returnItems.reduce((sum, item) => sum + item.returnQuantity, 0)
 
   const updateReturnQuantity = (borrowingItemId: string, quantity: number) => {
-    setReturnItems(prev => 
-      prev.map(item => 
-        item.borrowingItemId === borrowingItemId 
+    setReturnItems(prev =>
+      prev.map(item =>
+        item.borrowingItemId === borrowingItemId
           ? { ...item, returnQuantity: Math.max(0, quantity) }
           : item
       )
     )
   }
 
-  const getMaxReturnQuantity = (borrowingItemId: string) => {
-    const item = borrowing.items.find(i => i.id === borrowingItemId)
+  const getMaxReturnQuantity = useCallback((borrowingItemId: string) => {
+    const item = borrowing?.items?.find(i => i.id === borrowingItemId)
     return item ? item.quantity - item.returnedQuantity : 0
+  }, [borrowing?.items])
+
+  const _getItemDetails = (borrowingItemId: string) => {
+    return borrowing?.items?.find(i => i.id === borrowingItemId)
   }
 
-  const getItemDetails = (borrowingItemId: string) => {
-    return borrowing.items.find(i => i.id === borrowingItemId)
-  }
-
-  const handleReturnAll = () => {
+  const handleReturnAll = useCallback(() => {
     if (returnAll) {
       // Set all quantities to maximum returnable
-      setReturnItems(prev => 
+      setReturnItems(prev =>
         prev.map(item => ({
           ...item,
           returnQuantity: getMaxReturnQuantity(item.borrowingItemId)
@@ -99,21 +77,21 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
       )
     } else {
       // Set all quantities to 0
-      setReturnItems(prev => 
+      setReturnItems(prev =>
         prev.map(item => ({ ...item, returnQuantity: 0 }))
       )
     }
-  }
+  }, [returnAll, getMaxReturnQuantity])
 
   React.useEffect(() => {
     handleReturnAll()
-  }, [returnAll])
+  }, [handleReturnAll])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const itemsToReturn = returnItems.filter(item => item.returnQuantity > 0)
-    
+
     if (itemsToReturn.length === 0) {
       alert('Pilih minimal satu barang untuk dikembalikan')
       return
@@ -186,15 +164,15 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
             {activeItems.map((item) => {
               const returnItem = returnItems.find(ri => ri.borrowingItemId === item.id)
               const maxReturn = item.quantity - item.returnedQuantity
-              
+
               return (
                 <div key={item.id} className="p-4 border border-gray-200 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-3">
                       <Package className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
-                        <h5 className="font-medium text-gray-900">{item.item.name}</h5>
-                        <p className="text-sm text-gray-500">{item.item.category.name}</p>
+                        <h5 className="font-medium text-gray-900">{item.item?.name || 'Unknown Item'}</h5>
+                        <p className="text-sm text-gray-500">{item.item?.category?.name || 'Unknown Category'}</p>
                         <div className="flex items-center space-x-4 mt-2 text-sm">
                           <span className="text-gray-600">
                             Dipinjam: <strong>{item.quantity}</strong>
@@ -210,7 +188,7 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-2">
                       <label className="text-sm font-medium text-gray-700">
                         Kembalikan:
@@ -226,7 +204,7 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
                       <span className="text-sm text-gray-500">/ {maxReturn}</span>
                     </div>
                   </div>
-                  
+
                   {returnItem && returnItem.returnQuantity > 0 && (
                     <div className="mt-3 p-2 bg-green-50 rounded flex items-center space-x-2">
                       <CheckCircle className="h-4 w-4 text-green-600" />
@@ -274,8 +252,8 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
           >
             Batal
           </Button>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             loading={isLoading}
             disabled={totalItemsToReturn === 0}
           >

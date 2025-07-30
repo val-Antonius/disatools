@@ -9,7 +9,7 @@ import Modal from '@/components/ui/Modal'
 import EnhancedBorrowingForm from '@/components/borrowing/EnhancedBorrowingForm'
 import PartialReturnModal from '@/components/borrowing/PartialReturnModal'
 import { Plus, Search, ArrowLeft, Clock, CheckCircle, Package, Calendar, User, FileText, AlertTriangle } from 'lucide-react'
-import { BorrowingStatus, Borrowing, Item } from '@/types'
+import { BorrowingStatus, Borrowing, Item, BorrowingFormData, ReturnData } from '@/types'
 
 const getStatusColor = (status: BorrowingStatus) => {
   switch (status) {
@@ -73,7 +73,7 @@ const BorrowingPage: React.FC = () => {
       const response = await fetch('/api/borrowings')
       if (response.ok) {
         const data = await response.json()
-        setBorrowings(data.data || [])
+        setBorrowings((data.data as Borrowing[]) || [])
       }
     } catch (error) {
       console.error('Error fetching borrowings:', error)
@@ -87,7 +87,7 @@ const BorrowingPage: React.FC = () => {
       const response = await fetch('/api/items?status=AVAILABLE')
       if (response.ok) {
         const data = await response.json()
-        setAvailableItems(data.data || [])
+        setAvailableItems((data.data as Item[]) || [])
       }
     } catch (error) {
       console.error('Error fetching available items:', error)
@@ -98,7 +98,7 @@ const BorrowingPage: React.FC = () => {
     const matchesSearch =
       borrowing.borrowerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       borrowing.items?.some(item =>
-        item.item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        item.item?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       ) ||
       borrowing.purpose.toLowerCase().includes(searchTerm.toLowerCase())
 
@@ -119,7 +119,7 @@ const BorrowingPage: React.FC = () => {
     }
   }
 
-  const handlePartialReturn = async (borrowingId: string, returnData: any) => {
+  const handlePartialReturn = async (borrowingId: string, returnData: ReturnData) => {
     setIsLoading(true)
 
     try {
@@ -150,7 +150,7 @@ const BorrowingPage: React.FC = () => {
     }
   }
 
-  const handleSubmit = async (formData: any) => {
+  const handleSubmit = async (formData: BorrowingFormData) => {
     setIsLoading(true)
 
     try {
@@ -163,7 +163,7 @@ const BorrowingPage: React.FC = () => {
       })
 
       if (response.ok) {
-        const result = await response.json()
+        const _result = await response.json()
         // Refresh borrowings data
         await fetchBorrowings()
         setIsModalOpen(false)
@@ -315,7 +315,7 @@ const BorrowingPage: React.FC = () => {
                             {borrowing.purpose}
                           </p>
                           {borrowing.notes && (
-                            <p className="text-xs text-gray-500 mt-1 italic">"{borrowing.notes}"</p>
+                            <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{borrowing.notes}&rdquo;</p>
                           )}
                         </div>
                       </div>
@@ -347,8 +347,8 @@ const BorrowingPage: React.FC = () => {
                           <div key={item.id} className="bg-white rounded-md p-3 border border-gray-200">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="font-medium text-gray-900">{item.item.name}</p>
-                                <p className="text-xs text-gray-500">{item.item.category?.name}</p>
+                                <p className="font-medium text-gray-900">{item.item?.name || 'Unknown Item'}</p>
+                                <p className="text-xs text-gray-500">{item.item?.category?.name || 'Unknown Category'}</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-medium text-gray-900">
@@ -362,7 +362,7 @@ const BorrowingPage: React.FC = () => {
                               </div>
                             </div>
                             {item.notes && (
-                              <p className="text-xs text-gray-500 mt-2 italic">"{item.notes}"</p>
+                              <p className="text-xs text-gray-500 mt-2 italic">&ldquo;{item.notes}&rdquo;</p>
                             )}
                           </div>
                         ))}

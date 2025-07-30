@@ -5,15 +5,16 @@ import { BorrowingStatus } from '@/types'
 // POST /api/borrowings/[id]/return - Return borrowed items (full or partial)
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { notes, items } = body // items: array of {borrowingItemId, returnQuantity}
 
     // Check if borrowing exists and is active
     const borrowing = await prisma.borrowing.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         items: {
           include: {
@@ -76,7 +77,7 @@ export async function POST(
         const borrowingItem = borrowing.items.find(bi => bi.id === returnItem.borrowingItemId)!
 
         // Update borrowing item
-        const updatedBorrowingItem = await tx.borrowingItem.update({
+        const _updatedBorrowingItem = await tx.borrowingItem.update({
           where: { id: returnItem.borrowingItemId },
           data: {
             returnedQuantity: { increment: returnItem.returnQuantity },
@@ -124,7 +125,7 @@ export async function POST(
 
       // Check if all items are fully returned
       const updatedBorrowingItems = await tx.borrowingItem.findMany({
-        where: { borrowingId: params.id }
+        where: { borrowingId: id }
       })
 
       const allItemsReturned = updatedBorrowingItems.every(
@@ -133,7 +134,7 @@ export async function POST(
 
       // Update main borrowing status if all items returned
       const updatedBorrowing = await tx.borrowing.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: allItemsReturned ? BorrowingStatus.RETURNED : BorrowingStatus.ACTIVE,
           returnDate: allItemsReturned ? new Date() : null,

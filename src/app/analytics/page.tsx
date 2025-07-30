@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { BarChart3, PieChart, TrendingUp, Package, Activity } from 'lucide-react'
+import { AnalyticsResponse, CategoryDistribution, MostBorrowedItem } from '@/types'
 
-const CategoryChart: React.FC<{ data: any[] }> = ({ data }) => {
+const CategoryChart: React.FC<{ data: CategoryDistribution[] }> = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-8">
@@ -19,7 +20,7 @@ const CategoryChart: React.FC<{ data: any[] }> = ({ data }) => {
 
   return (
     <div className="space-y-4">
-      {data.map((item, index) => (
+      {data.map((item, _index) => (
         <div key={item.categoryName} className="flex items-center space-x-4">
           <div className="w-24 text-sm font-medium text-gray-700">
             {item.categoryName}
@@ -43,7 +44,7 @@ const CategoryChart: React.FC<{ data: any[] }> = ({ data }) => {
   )
 }
 
-const MostBorrowedChart: React.FC<{ data: any[] }> = ({ data }) => {
+const MostBorrowedChart: React.FC<{ data: MostBorrowedItem[] }> = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-8">
@@ -84,7 +85,13 @@ const MostBorrowedChart: React.FC<{ data: any[] }> = ({ data }) => {
   )
 }
 
-const TrendChart: React.FC<{ data: any[] }> = ({ data }) => {
+interface MonthlyTrendData {
+  month: string;
+  borrowCount: number;
+  returnCount: number;
+}
+
+const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-8">
@@ -135,7 +142,7 @@ const TrendChart: React.FC<{ data: any[] }> = ({ data }) => {
 }
 
 const AnalyticsPage: React.FC = () => {
-  const [analyticsData, setAnalyticsData] = useState<any>(null)
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -148,7 +155,7 @@ const AnalyticsPage: React.FC = () => {
       const response = await fetch('/api/analytics')
       if (response.ok) {
         const data = await response.json()
-        setAnalyticsData(data.data)
+        setAnalyticsData(data.data as AnalyticsResponse)
       }
     } catch (error) {
       console.error('Error fetching analytics data:', error)
@@ -172,10 +179,10 @@ const AnalyticsPage: React.FC = () => {
   const mostBorrowedItems = analyticsData?.mostBorrowedItems || []
   const monthlyTrend = analyticsData?.monthlyTrend || []
 
-  const totalItems = categoryDistribution.reduce((sum: number, item: any) => sum + item.itemCount, 0)
-  const totalBorrowings = mostBorrowedItems.reduce((sum: number, item: any) => sum + item.borrowCount, 0)
+  const totalItems = categoryDistribution.reduce((sum: number, item: CategoryDistribution) => sum + item.itemCount, 0)
+  const totalBorrowings = mostBorrowedItems.reduce((sum: number, item: MostBorrowedItem) => sum + item.borrowCount, 0)
   const avgBorrowingPerMonth = monthlyTrend.length > 0 ? Math.round(
-    monthlyTrend.reduce((sum: number, item: any) => sum + item.borrowCount, 0) / monthlyTrend.length
+    monthlyTrend.reduce((sum: number, item: MonthlyTrendData) => sum + item.borrowCount, 0) / monthlyTrend.length
   ) : 0
 
   return (
@@ -294,7 +301,7 @@ const AnalyticsPage: React.FC = () => {
         {/* Dynamic Insights */}
         {analyticsData?.insights && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {analyticsData.insights.map((insight: any, index: number) => (
+            {analyticsData.insights.map((insight, index: number) => (
               <Card key={index} className={`glass border-l-4 ${
                 index === 0 ? 'border-l-blue-500' :
                 index === 1 ? 'border-l-green-500' : 'border-l-purple-500'

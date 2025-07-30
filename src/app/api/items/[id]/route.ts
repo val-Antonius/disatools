@@ -5,17 +5,27 @@ import { ItemStatus } from '@/types'
 // GET /api/items/[id] - Get single item
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const item = await prisma.item.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         category: true,
         location: true,
-        borrowings: {
+        borrowingItems: {
           where: { status: 'ACTIVE' },
-          include: { item: true }
+          include: {
+            borrowing: {
+              select: {
+                borrowerName: true,
+                purpose: true,
+                borrowDate: true,
+                expectedReturnDate: true
+              }
+            }
+          }
         },
         activities: {
           orderBy: { createdAt: 'desc' },
@@ -47,15 +57,16 @@ export async function GET(
 // PUT /api/items/[id] - Update item
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { name, description, stock, minStock, categoryId, locationId, status } = body
 
     // Check if item exists
     const existingItem = await prisma.item.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { category: true, location: true }
     })
 
@@ -94,7 +105,7 @@ export async function PUT(
     }
 
     const updatedItem = await prisma.item.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(name && { name }),
         ...(description !== undefined && { description }),
@@ -116,7 +127,7 @@ export async function PUT(
         type: 'ITEM_UPDATED',
         description: `Item "${updatedItem.name}" diperbarui`,
         itemId: updatedItem.id,
-        metadata: { 
+        metadata: {
           changes: body,
           previousStock: existingItem.stock,
           newStock: updatedItem.stock
@@ -141,14 +152,15 @@ export async function PUT(
 // DELETE /api/items/[id] - Delete item
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Check if item exists
     const item = await prisma.item.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
-        borrowings: {
+        borrowingItems: {
           where: { status: 'ACTIVE' }
         }
       }
@@ -162,7 +174,7 @@ export async function DELETE(
     }
 
     // Check if item has active borrowings
-    if (item.borrowings.length > 0) {
+    if (item.borrowingItems.length > 0) {
       return NextResponse.json(
         { success: false, error: 'Cannot delete item with active borrowings' },
         { status: 400 }
@@ -170,7 +182,7 @@ export async function DELETE(
     }
 
     await prisma.item.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     // Log activity
@@ -178,7 +190,7 @@ export async function DELETE(
       data: {
         type: 'ITEM_DELETED',
         description: `Item "${item.name}" dihapus dari inventaris`,
-        metadata: { 
+        metadata: {
           itemName: item.name,
           category: item.categoryId,
           location: item.locationId

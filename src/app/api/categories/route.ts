@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 // GET /api/categories - Get all categories
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const categories = await prisma.category.findMany({
       include: {

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { FileText, Download, Calendar, Filter, AlertCircle } from 'lucide-react'
+import { Activity } from '@/types'
 import {
   exportToPDF,
   exportToExcel,
@@ -40,7 +41,7 @@ const ReportsPage: React.FC = () => {
   })
   const [isGenerating, setIsGenerating] = useState(false)
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-  const [activitiesData, setActivitiesData] = useState<any[]>([])
+  const [activitiesData, setActivitiesData] = useState<Activity[]>([])
   const [isLoadingActivities, setIsLoadingActivities] = useState(false)
 
   // Pre-fill filters from URL params (from Calendar integration)
@@ -79,7 +80,7 @@ const ReportsPage: React.FC = () => {
       const response = await fetch(`/api/activities?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
-        setActivitiesData(data.data || [])
+        setActivitiesData((data.data as Activity[]) || [])
       }
     } catch (error) {
       console.error('Error fetching activities:', error)
@@ -94,6 +95,7 @@ const ReportsPage: React.FC = () => {
     if (reportType === 'activities') {
       fetchActivities()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportType, filters.dateFrom, filters.dateTo, filters.activityType])
 
   const handleFilterChange = (field: string, value: string) => {
@@ -113,8 +115,26 @@ const ReportsPage: React.FC = () => {
       let result
 
       if (reportType === 'borrowings') {
+        // Convert ReportData to BorrowingForExport format
+        const borrowingExportData = filteredData.map(item => ({
+          id: item.id,
+          borrowerName: item.borrowerName,
+          borrowDate: item.borrowDate,
+          returnDate: item.returnDate,
+          purpose: item.purpose,
+          status: item.status,
+          items: [{
+            item: {
+              name: item.itemName,
+              category: { name: item.category }
+            },
+            quantity: 1, // Default quantity since ReportData doesn't have this
+            returnedQuantity: item.status === 'Dikembalikan' ? 1 : 0
+          }]
+        }))
+
         // Generate borrowings report
-        const exportData = prepareBorrowingDataForExport(filteredData)
+        const exportData = prepareBorrowingDataForExport(borrowingExportData)
 
         if (format === 'pdf') {
           result = await exportToPDF(exportData, filters)
@@ -122,8 +142,14 @@ const ReportsPage: React.FC = () => {
           result = await exportToExcel(exportData, filters)
         }
       } else {
+        // Convert Activity to ActivityForExport format
+        const activityExportData = activitiesData.map(activity => ({
+          ...activity,
+          createdAt: activity.createdAt.toISOString()
+        }))
+
         // Generate activities report
-        const exportData = prepareActivityDataForExport(activitiesData)
+        const exportData = prepareActivityDataForExport(activityExportData)
 
         if (format === 'pdf') {
           result = await exportActivitiesToPDF(exportData, filters)
@@ -177,13 +203,21 @@ const ReportsPage: React.FC = () => {
       if (response.ok) {
         const data = await response.json()
         // Transform data for report format
-        const transformedData = data.data?.map((borrowing: any) => ({
+        const transformedData = data.data?.map((borrowing: {
+          id: string;
+          borrowerName: string;
+          items?: Array<{ item: { name: string; category?: { name: string } } }>;
+          borrowDate: string;
+          returnDate?: string;
+          purpose: string;
+          status: string;
+        }) => ({
           id: borrowing.id,
           borrowerName: borrowing.borrowerName,
-          itemName: borrowing.items?.map((item: any) => item.item.name).join(', ') || '',
+          itemName: borrowing.items?.map((item) => item.item.name).join(', ') || '',
           category: borrowing.items?.[0]?.item.category?.name || '',
           borrowDate: borrowing.borrowDate,
-          returnDate: borrowing.returnDate,
+          returnDate: borrowing.returnDate || null,
           purpose: borrowing.purpose,
           status: borrowing.status === 'ACTIVE' ? 'Aktif' :
                   borrowing.status === 'RETURNED' ? 'Dikembalikan' : 'Terlambat'
@@ -203,6 +237,7 @@ const ReportsPage: React.FC = () => {
     if (reportType === 'borrowings') {
       fetchBorrowings()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportType, filters.dateFrom, filters.dateTo, filters.category, filters.status])
 
   const filteredData = borrowingsData

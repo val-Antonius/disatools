@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ActivityType } from '@/types'
 
 // GET /api/activities - Get activities with optional filters for reporting
 export async function GET(request: NextRequest) {
@@ -12,7 +13,16 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '100')
 
-    const where: any = {}
+    interface WhereClause {
+      createdAt?: {
+        gte?: Date;
+        lt?: Date;
+      };
+      type?: ActivityType;
+      itemId?: string;
+    }
+
+    const where: WhereClause = {}
 
     // Date range filter
     if (dateFrom || dateTo) {
@@ -29,8 +39,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Activity type filter
-    if (type) {
-      where.type = type
+    if (type && Object.values(ActivityType).includes(type as ActivityType)) {
+      where.type = type as ActivityType
     }
 
     // Item filter

@@ -104,7 +104,7 @@ export interface Activity {
   itemId?: string;
   borrowingId?: string;
   userId?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   item?: Item;
   borrowing?: Borrowing;
@@ -224,7 +224,7 @@ export interface CalendarEvent {
   date: Date;
   type: ActivityType;
   description: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 // Report types
@@ -252,7 +252,7 @@ export interface TableColumn<T> {
   key: keyof T;
   label: string;
   sortable?: boolean;
-  render?: (value: any, item: T) => React.ReactNode;
+  render?: (value: unknown, item: T) => React.ReactNode;
 }
 
 export interface SortConfig {
@@ -264,6 +264,76 @@ export interface SortConfig {
 export interface NavItem {
   label: string;
   href: string;
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ className?: string }>;
   active?: boolean;
+}
+
+// Dashboard types
+export interface DashboardData {
+  kpi: DashboardKPI;
+  recentActivities: Activity[];
+  quickStats: {
+    topCategory?: { name: string; count: number };
+    topLocation?: { name: string; count: number };
+    todayBorrowings: number;
+    todayReturns: number;
+  };
+}
+
+// Analytics response types
+export interface AnalyticsResponse {
+  categoryDistribution: CategoryDistribution[];
+  mostBorrowedItems: MostBorrowedItem[];
+  monthlyTrend: {
+    month: string;
+    borrowCount: number;
+    returnCount: number;
+  }[];
+  insights?: {
+    title: string;
+    description: string;
+  }[];
+}
+
+// Form data types
+export interface BorrowingFormData {
+  borrowerName: string;
+  purpose: string;
+  expectedReturnDate: string;
+  notes?: string;
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    notes?: string;
+  }>;
+}
+
+export interface ItemFormData {
+  name: string;
+  description: string;
+  stock: number;
+  minStock: number;
+  categoryId: string;
+  locationId: string;
+}
+
+// Return data types
+export interface ReturnData {
+  items: Array<{
+    borrowingItemId: string;
+    returnQuantity: number;
+  }>;
+  notes?: string;
+}
+
+// Report data types
+export interface ReportData {
+  id: string;
+  borrowerName: string;
+  itemName: string;
+  category: string;
+  borrowDate: string;
+  returnDate: string | null;
+  purpose: string;
+  status: string;
 }

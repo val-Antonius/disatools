@@ -8,7 +8,15 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')
     const limit = parseInt(searchParams.get('limit') || '10')
 
-    const where: any = {
+    interface WhereClause {
+      borrowCount: { gte: number };
+      name?: {
+        contains: string;
+        mode: 'insensitive';
+      };
+    }
+
+    const where: WhereClause = {
       borrowCount: { gte: 2 } // Show borrowers with 2+ borrowings
     }
 

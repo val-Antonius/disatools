@@ -4,12 +4,19 @@ import React, { useState, useEffect } from 'react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { Plus, Minus, Search } from 'lucide-react'
-import { BorrowingItemForm, FrequentBorrower } from '@/types'
+import { BorrowingItemForm, FrequentBorrower, BorrowingFormData } from '@/types'
+
+interface AvailableItem {
+  id: string;
+  name: string;
+  stock: number;
+  category?: { name: string };
+}
 
 interface EnhancedBorrowingFormProps {
-  onSubmit: (data: any) => void
+  onSubmit: (data: BorrowingFormData) => void
   onCancel: () => void
-  availableItems: Array<{ id: string; name: string; stock: number; category?: { name: string } }>
+  availableItems: AvailableItem[]
   isLoading?: boolean
 }
 
@@ -38,7 +45,7 @@ const EnhancedBorrowingForm: React.FC<EnhancedBorrowingFormProps> = ({
         const response = await fetch('/api/frequent-borrowers')
         if (response.ok) {
           const data = await response.json()
-          setFrequentBorrowers(data.data || [])
+          setFrequentBorrowers((data.data as FrequentBorrower[]) || [])
         }
       } catch (error) {
         console.error('Error fetching frequent borrowers:', error)
@@ -69,7 +76,7 @@ const EnhancedBorrowingForm: React.FC<EnhancedBorrowingFormProps> = ({
     }
   }
 
-  const updateItem = (index: number, field: keyof BorrowingItemForm, value: any) => {
+  const updateItem = (index: number, field: keyof BorrowingItemForm, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       items: prev.items.map((item, i) =>
@@ -116,7 +123,7 @@ const EnhancedBorrowingForm: React.FC<EnhancedBorrowingFormProps> = ({
     e.preventDefault()
 
     if (!validateForm()) {
-      alert('Please fill all required fields and check item quantities')
+      alert('Mohon lengkapi semua field yang diperlukan dan periksa jumlah barang')
       return
     }
 
