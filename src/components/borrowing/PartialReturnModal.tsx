@@ -29,6 +29,31 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
   const [notes, setNotes] = useState('')
   const [returnAll, setReturnAll] = useState(true)
 
+  // Move all hooks to the top before any early returns
+  const getMaxReturnQuantity = useCallback((borrowingItemId: string) => {
+    const item = borrowing?.items?.find(i => i.id === borrowingItemId)
+    return item ? item.quantity - item.returnedQuantity : 0
+  }, [borrowing?.items])
+
+  const handleReturnAll = useCallback(() => {
+    if (!borrowing?.items) return
+
+    if (returnAll) {
+      // Set all quantities to maximum returnable
+      setReturnItems(prev =>
+        prev.map(item => ({
+          ...item,
+          returnQuantity: getMaxReturnQuantity(item.borrowingItemId)
+        }))
+      )
+    } else {
+      // Set all quantities to 0
+      setReturnItems(prev =>
+        prev.map(item => ({ ...item, returnQuantity: 0 }))
+      )
+    }
+  }, [returnAll, getMaxReturnQuantity, borrowing?.items])
+
   // Initialize return items when borrowing changes
   React.useEffect(() => {
     if (borrowing && borrowing.items) {
@@ -42,6 +67,11 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
     }
   }, [borrowing])
 
+  React.useEffect(() => {
+    handleReturnAll()
+  }, [handleReturnAll])
+
+  // Early return after all hooks
   if (!borrowing || !borrowing.items) return null
 
   const activeItems = borrowing.items.filter(item => item.status === BorrowingStatus.ACTIVE)
@@ -57,35 +87,9 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
     )
   }
 
-  const getMaxReturnQuantity = useCallback((borrowingItemId: string) => {
-    const item = borrowing?.items?.find(i => i.id === borrowingItemId)
-    return item ? item.quantity - item.returnedQuantity : 0
-  }, [borrowing?.items])
-
   const _getItemDetails = (borrowingItemId: string) => {
     return borrowing?.items?.find(i => i.id === borrowingItemId)
   }
-
-  const handleReturnAll = useCallback(() => {
-    if (returnAll) {
-      // Set all quantities to maximum returnable
-      setReturnItems(prev =>
-        prev.map(item => ({
-          ...item,
-          returnQuantity: getMaxReturnQuantity(item.borrowingItemId)
-        }))
-      )
-    } else {
-      // Set all quantities to 0
-      setReturnItems(prev =>
-        prev.map(item => ({ ...item, returnQuantity: 0 }))
-      )
-    }
-  }, [returnAll, getMaxReturnQuantity])
-
-  React.useEffect(() => {
-    handleReturnAll()
-  }, [handleReturnAll])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

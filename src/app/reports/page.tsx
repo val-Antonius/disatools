@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -29,7 +29,8 @@ interface ReportData {
   status: string
 }
 
-const ReportsPage: React.FC = () => {
+// Component that uses useSearchParams - needs to be wrapped in Suspense
+const ReportsContent: React.FC = () => {
   const searchParams = useSearchParams()
   const [reportType, setReportType] = useState<'borrowings' | 'activities'>('borrowings')
   const [filters, setFilters] = useState({
@@ -607,6 +608,35 @@ const ReportsPage: React.FC = () => {
         </Card>
       </div>
     </AppLayout>
+  )
+}
+
+// Loading component for Suspense fallback
+const ReportsLoading: React.FC = () => {
+  return (
+    <AppLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Reporting</h1>
+          <p className="text-gray-600 mt-1">
+            Generate dan unduh laporan aktivitas inventaris
+          </p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600">Loading...</span>
+        </div>
+      </div>
+    </AppLayout>
+  )
+}
+
+// Main component with Suspense boundary
+const ReportsPage: React.FC = () => {
+  return (
+    <Suspense fallback={<ReportsLoading />}>
+      <ReportsContent />
+    </Suspense>
   )
 }
 
