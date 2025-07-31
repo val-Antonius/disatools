@@ -1,0 +1,157 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Enum untuk status barang
+enum ItemStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+// Enum untuk status peminjaman
+enum BorrowingStatus {
+  ACTIVE
+  RETURNED
+  OVERDUE
+}
+
+// Enum untuk tipe aktivitas
+enum ActivityType {
+  ITEM_ADDED
+  ITEM_UPDATED
+  ITEM_DELETED
+  ITEM_BORROWED
+  ITEM_RETURNED
+  STOCK_UPDATED
+}
+
+// Model untuk kategori barang
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relasi
+  items       Item[]
+
+  @@map("categories")
+}
+
+// Model untuk lokasi/rak
+model Location {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relasi
+  items       Item[]
+
+  @@map("locations")
+}
+
+// Model untuk barang/item
+model Item {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  stock       Int        @default(0)
+  minStock    Int        @default(5) // Minimum stock untuk alert
+  status      ItemStatus @default(AVAILABLE)
+  categoryId  String
+  locationId  String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relasi
+  category    Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  location    Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  borrowingItems BorrowingItem[] // Updated relation
+  activities  Activity[]
+
+  @@map("items")
+}
+
+// Model untuk peminjaman (header)
+model Borrowing {
+  id           String          @id @default(cuid())
+  borrowerName String
+  purpose      String
+  borrowDate   DateTime        @default(now())
+  returnDate   DateTime?
+  expectedReturnDate DateTime
+  status       BorrowingStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relasi
+  items        BorrowingItem[] // One-to-many dengan BorrowingItem
+  activities   Activity[]
+
+  @@map("borrowings")
+}
+
+// Model untuk detail item dalam peminjaman
+model BorrowingItem {
+  id          String    @id @default(cuid())
+  borrowingId String
+  itemId      String
+  quantity    Int
+  returnedQuantity Int @default(0)
+  status      BorrowingStatus @default(ACTIVE)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relasi
+  borrowing   Borrowing @relation(fields: [borrowingId], references: [id], onDelete: Cascade)
+  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("borrowing_items")
+}
+
+// Model untuk frequent borrowers
+model FrequentBorrower {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  email        String?
+  phone        String?
+  department   String?
+  borrowCount  Int      @default(1)
+  lastBorrow   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("frequent_borrowers")
+}
+
+// Model untuk log aktivitas
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  itemId      String?
+  borrowingId String?
+  userId      String?      // Untuk future user management
+  metadata    Json?        // Data tambahan dalam format JSON
+  createdAt   DateTime     @default(now())
+
+  // Relasi
+  item        Item?        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrowing   Borrowing?   @relation(fields: [borrowingId], references: [id], onDelete: Cascade)
+
+  @@map("activities")
+}
