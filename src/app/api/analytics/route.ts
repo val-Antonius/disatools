@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest) {
       }
     })
 
-    const totalItems = categoryDistribution.reduce((sum, cat) => sum + cat._count.items, 0)
+    const totalItems = categoryDistribution.reduce((sum: number, cat) => sum + cat._count.items, 0)
 
     const categoryData = categoryDistribution.map(category => ({
       categoryName: category.name,

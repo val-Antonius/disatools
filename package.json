@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prebuild": "npm run lint && npm run typecheck",
+    "typecheck": "tsc --noEmit",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
