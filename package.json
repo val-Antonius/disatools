@@ -15,6 +15,10 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "db:studio": "prisma studio",
+    "db:perlengkapan_kantor": "tsx prisma/seed-perlengkapan-kantor.ts",
+    "db:perlengkapan_jaringan": "tsx prisma/seed-perlengkapan-jaringan.ts",
+    "db:perlengkapan_lapangan": "tsx prisma/seed-perlengkapan-lapangan.ts",
+    "db:perlengkapan_keselamatan": "tsx prisma/seed-perlengkapan-keselamatan.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

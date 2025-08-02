@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Package, AlertTriangle, ArrowRightLeft, Clock, Activity } from 'lucide-react'
-import { Activity as ActivityType, DashboardData } from '@/types'
+import { DashboardActivity, DashboardData } from '@/types'
 
 const KPICard: React.FC<{
   title: string
@@ -31,8 +31,12 @@ const KPICard: React.FC<{
 }
 
 const ActivityItem: React.FC<{
-  activity: ActivityType
+  activity: DashboardActivity
 }> = ({ activity }) => {
+  // Early return if activity is invalid
+  if (!activity || !activity.id) {
+    return null
+  }
   const getActivityColor = (type: string) => {
     switch (type) {
       case 'ITEM_BORROWED':
@@ -48,19 +52,35 @@ const ActivityItem: React.FC<{
     }
   }
 
-  const formatTime = (date: Date | string) => {
-    const dateObj = typeof date === 'string' ? new Date(date) : date
-    return dateObj.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const formatTime = (date: Date | string | null | undefined): string => {
+    // Handle null, undefined, or invalid date
+    if (!date) {
+      return '--:--'
+    }
+
+    try {
+      const dateObj = typeof date === 'string' ? new Date(date) : date
+
+      // Check if the date is valid
+      if (isNaN(dateObj.getTime())) {
+        return '--:--'
+      }
+
+      return dateObj.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch (error) {
+      console.warn('Error formatting time:', error)
+      return '--:--'
+    }
   }
 
   return (
     <div className="flex items-start space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-      <div className={`w-2 h-2 rounded-full mt-2 ${getActivityColor(activity.type).split(' ')[1]}`} />
+      <div className={`w-2 h-2 rounded-full mt-2 ${getActivityColor(activity.type || '').split(' ')[1] || 'bg-gray-100'}`} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-gray-900">{activity.description}</p>
+        <p className="text-sm text-gray-900">{activity.description || 'Aktivitas tidak diketahui'}</p>
         <p className="text-xs text-gray-500">{formatTime(activity.createdAt)}</p>
       </div>
     </div>
@@ -176,9 +196,11 @@ const DashboardPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {recentActivities.map((activity: ActivityType) => (
-                    <ActivityItem key={activity.id} activity={activity} />
-                  ))}
+                  {recentActivities
+                    .filter((activity: DashboardActivity) => activity && activity.id) // Filter out invalid activities
+                    .map((activity: DashboardActivity) => (
+                      <ActivityItem key={activity.id || Math.random()} activity={activity} />
+                    ))}
                 </div>
               )}
             </CardContent>

@@ -48,19 +48,20 @@ const Modal: React.FC<ModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto animate-fade-in">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        className="fixed inset-0 bg-gray-900 bg-opacity-20 backdrop-blur-sm transition-opacity duration-300"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className={cn(
-            'relative w-full transform rounded-xl bg-white shadow-xl transition-all',
-            'backdrop-blur-md bg-white/95 border border-white/20',
+            'relative w-full transform rounded-xl bg-white shadow-xl transition-all duration-300',
+            'backdrop-blur-md bg-white/98 border border-gray-200/50 shadow-2xl',
+            'animate-slide-up',
             sizes[size]
           )}
           onClick={(e) => e.stopPropagation()}
@@ -78,14 +79,14 @@ const Modal: React.FC<ModalProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={onClose}
-                  className="p-2 hover:bg-gray-100"
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4 text-gray-500 hover:text-gray-700" />
                 </Button>
               )}
             </div>
           )}
-          
+
           {/* Content */}
           <div className="px-6 py-4">
             {children}

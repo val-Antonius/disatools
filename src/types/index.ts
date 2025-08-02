@@ -268,10 +268,20 @@ export interface NavItem {
   active?: boolean;
 }
 
+// Dashboard activity type (simplified for dashboard display)
+export interface DashboardActivity {
+  id: string;
+  type: ActivityType;
+  description: string;
+  createdAt: Date | string;
+  itemName?: string;
+  borrowerName?: string;
+}
+
 // Dashboard types
 export interface DashboardData {
   kpi: DashboardKPI;
-  recentActivities: Activity[];
+  recentActivities: DashboardActivity[];
   quickStats: {
     topCategory?: { name: string; count: number };
     topLocation?: { name: string; count: number };

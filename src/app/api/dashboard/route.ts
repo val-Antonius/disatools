@@ -119,7 +119,7 @@ export async function GET(_request: NextRequest) {
         id: activity.id,
         type: activity.type,
         description: activity.description,
-        timestamp: activity.createdAt,
+        createdAt: activity.createdAt,
         itemName: activity.item?.name,
         borrowerName: activity.borrowing?.borrowerName
       })),
