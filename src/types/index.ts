@@ -11,13 +11,22 @@ export enum BorrowingStatus {
   OVERDUE = 'OVERDUE'
 }
 
+export enum ItemCondition {
+  GOOD = 'GOOD',
+  DAMAGED = 'DAMAGED',
+  LOST = 'LOST',
+  INCOMPLETE = 'INCOMPLETE'
+}
+
 export enum ActivityType {
   ITEM_ADDED = 'ITEM_ADDED',
   ITEM_UPDATED = 'ITEM_UPDATED',
   ITEM_DELETED = 'ITEM_DELETED',
   ITEM_BORROWED = 'ITEM_BORROWED',
   ITEM_RETURNED = 'ITEM_RETURNED',
-  STOCK_UPDATED = 'STOCK_UPDATED'
+  STOCK_UPDATED = 'STOCK_UPDATED',
+  ITEM_DAMAGED = 'ITEM_DAMAGED',
+  ITEM_LOST = 'ITEM_LOST'
 }
 
 // Base types
@@ -77,7 +86,11 @@ export interface BorrowingItem {
   itemId: string;
   quantity: number;
   returnedQuantity: number;
+  damagedQuantity: number;
+  lostQuantity: number;
   status: BorrowingStatus;
+  condition?: ItemCondition;
+  returnNotes?: string;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;

@@ -24,6 +24,14 @@ enum BorrowingStatus {
   OVERDUE
 }
 
+// Enum untuk kondisi barang saat pengembalian
+enum ItemCondition {
+  GOOD        // Baik
+  DAMAGED     // Rusak
+  LOST        // Hilang
+  INCOMPLETE  // Tidak lengkap
+}
+
 // Enum untuk tipe aktivitas
 enum ActivityType {
   ITEM_ADDED
@@ -32,6 +40,8 @@ enum ActivityType {
   ITEM_BORROWED
   ITEM_RETURNED
   STOCK_UPDATED
+  ITEM_DAMAGED
+  ITEM_LOST
 }
 
 // Model untuk kategori barang
@@ -111,8 +121,12 @@ model BorrowingItem {
   itemId      String
   quantity    Int
   returnedQuantity Int @default(0)
+  damagedQuantity  Int @default(0)  // Jumlah barang rusak
+  lostQuantity     Int @default(0)  // Jumlah barang hilang
   status      BorrowingStatus @default(ACTIVE)
-  notes       String?
+  condition   ItemCondition?        // Kondisi saat pengembalian
+  returnNotes String?               // Catatan khusus pengembalian
+  notes       String?               // Catatan umum
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

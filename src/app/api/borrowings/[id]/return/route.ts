@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { BorrowingStatus } from '@/types'
+import { BorrowingStatus, ItemCondition } from '@/types'
 
 // POST /api/borrowings/[id]/return - Return borrowed items (full or partial)
 export async function POST(
@@ -10,7 +10,7 @@ export async function POST(
   try {
     const { id } = await params
     const body = await request.json()
-    const { notes, items } = body // items: array of {borrowingItemId, returnQuantity}
+    const { notes, items } = body // items: array of {borrowingItemId, returnQuantity, damagedQuantity, lostQuantity, condition, returnNotes}
 
     // Check if borrowing exists and is active
     const borrowing = await prisma.borrowing.findUnique({
@@ -46,7 +46,11 @@ export async function POST(
     // If no specific items provided, return all items
     const itemsToReturn = items || borrowing.items.map(item => ({
       borrowingItemId: item.id,
-      returnQuantity: item.quantity - item.returnedQuantity
+      returnQuantity: item.quantity - item.returnedQuantity,
+      damagedQuantity: 0,
+      lostQuantity: 0,
+      condition: ItemCondition.GOOD,
+      returnNotes: ''
     }))
 
     // Validate return quantities
@@ -60,9 +64,11 @@ export async function POST(
       }
 
       const availableToReturn = borrowingItem.quantity - borrowingItem.returnedQuantity
-      if (returnItem.returnQuantity > availableToReturn) {
+      const totalReturning = (returnItem.returnQuantity || 0) + (returnItem.damagedQuantity || 0) + (returnItem.lostQuantity || 0)
+
+      if (totalReturning > availableToReturn) {
         return NextResponse.json(
-          { success: false, error: `Cannot return ${returnItem.returnQuantity} of ${borrowingItem.item.name}. Only ${availableToReturn} available to return.` },
+          { success: false, error: `Cannot return ${totalReturning} of ${borrowingItem.item.name}. Only ${availableToReturn} available to return.` },
           { status: 400 }
         )
       }
@@ -75,46 +81,94 @@ export async function POST(
       // Process each item return
       for (const returnItem of itemsToReturn) {
         const borrowingItem = borrowing.items.find(bi => bi.id === returnItem.borrowingItemId)!
+        const totalReturning = (returnItem.returnQuantity || 0) + (returnItem.damagedQuantity || 0) + (returnItem.lostQuantity || 0)
 
-        // Update borrowing item
+        // Update borrowing item with condition tracking
         const _updatedBorrowingItem = await tx.borrowingItem.update({
           where: { id: returnItem.borrowingItemId },
           data: {
-            returnedQuantity: { increment: returnItem.returnQuantity },
-            status: borrowingItem.returnedQuantity + returnItem.returnQuantity >= borrowingItem.quantity
+            returnedQuantity: { increment: totalReturning },
+            damagedQuantity: { increment: returnItem.damagedQuantity || 0 },
+            lostQuantity: { increment: returnItem.lostQuantity || 0 },
+            condition: returnItem.condition || ItemCondition.GOOD,
+            returnNotes: returnItem.returnNotes || null,
+            status: borrowingItem.returnedQuantity + totalReturning >= borrowingItem.quantity
               ? BorrowingStatus.RETURNED
               : BorrowingStatus.ACTIVE
           }
         })
 
-        // Update item stock
-        const updatedItem = await tx.item.update({
-          where: { id: borrowingItem.itemId },
-          data: {
-            stock: { increment: returnItem.returnQuantity },
-            status: 'AVAILABLE'
-          }
-        })
+        // Update item stock (only good items go back to stock)
+        const goodItemsReturned = returnItem.returnQuantity || 0
+        if (goodItemsReturned > 0) {
+          await tx.item.update({
+            where: { id: borrowingItem.itemId },
+            data: {
+              stock: { increment: goodItemsReturned },
+              status: 'AVAILABLE'
+            }
+          })
+        }
 
-        // Log activity
+        // Log return activity
         await tx.activity.create({
           data: {
             type: 'ITEM_RETURNED',
-            description: `${returnItem.returnQuantity} unit "${borrowingItem.item.name}" dikembalikan oleh ${borrowing.borrowerName}`,
+            description: `${totalReturning} unit "${borrowingItem.item.name}" dikembalikan oleh ${borrowing.borrowerName}`,
             itemId: borrowingItem.itemId,
             borrowingId: borrowing.id,
             metadata: {
               borrowerName: borrowing.borrowerName,
-              quantity: returnItem.returnQuantity,
+              returnQuantity: returnItem.returnQuantity || 0,
+              damagedQuantity: returnItem.damagedQuantity || 0,
+              lostQuantity: returnItem.lostQuantity || 0,
+              condition: returnItem.condition || ItemCondition.GOOD,
+              returnNotes: returnItem.returnNotes || '',
               borrowDate: borrowing.borrowDate,
               returnDate: new Date(),
-              previousStock: borrowingItem.item.stock,
-              newStock: updatedItem.stock,
               isOverdue: new Date() > borrowing.expectedReturnDate,
-              isPartialReturn: returnItem.returnQuantity < (borrowingItem.quantity - borrowingItem.returnedQuantity)
+              isPartialReturn: totalReturning < (borrowingItem.quantity - borrowingItem.returnedQuantity)
             }
           }
         })
+
+        // Log damaged items if any
+        if (returnItem.damagedQuantity && returnItem.damagedQuantity > 0) {
+          await tx.activity.create({
+            data: {
+              type: 'ITEM_DAMAGED',
+              description: `${returnItem.damagedQuantity} unit "${borrowingItem.item.name}" dikembalikan dalam kondisi rusak`,
+              itemId: borrowingItem.itemId,
+              borrowingId: borrowing.id,
+              metadata: {
+                borrowerName: borrowing.borrowerName,
+                damagedQuantity: returnItem.damagedQuantity,
+                condition: returnItem.condition,
+                returnNotes: returnItem.returnNotes || '',
+                returnDate: new Date()
+              }
+            }
+          })
+        }
+
+        // Log lost items if any
+        if (returnItem.lostQuantity && returnItem.lostQuantity > 0) {
+          await tx.activity.create({
+            data: {
+              type: 'ITEM_LOST',
+              description: `${returnItem.lostQuantity} unit "${borrowingItem.item.name}" dilaporkan hilang`,
+              itemId: borrowingItem.itemId,
+              borrowingId: borrowing.id,
+              metadata: {
+                borrowerName: borrowing.borrowerName,
+                lostQuantity: returnItem.lostQuantity,
+                condition: returnItem.condition,
+                returnNotes: returnItem.returnNotes || '',
+                returnDate: new Date()
+              }
+            }
+          })
+        }
 
         returnedItems.push({
           itemName: borrowingItem.item.name,

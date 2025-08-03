@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useState, useEffect, Suspense } from 'react'
+import React, { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
-import { FileText, Download, Calendar, Filter, AlertCircle } from 'lucide-react'
-import { Activity } from '@/types'
+import { FileText, Download, Calendar, Filter, AlertCircle, AlertTriangle, Package, BarChart3, Activity as ActivityIcon, CheckCircle } from 'lucide-react'
+import { Activity, ItemCondition } from '@/types'
 import {
   exportToPDF,
   exportToExcel,
@@ -17,7 +17,52 @@ import {
   prepareActivityDataForExport
 } from '@/lib/exportUtils'
 
-// Types for report data
+// Enhanced types for report data
+interface ConditionReportData {
+  itemId: string
+  itemName: string
+  category: string
+  totalBorrowings: number
+  goodReturns: number
+  damagedReturns: number
+  lostItems: number
+  damageRate: number
+  lossRate: number
+  lastCondition?: ItemCondition
+  maintenanceNeeded: boolean
+  estimatedValue: number
+  totalLoss: number
+}
+
+interface DamageReportData {
+  borrowingId: string
+  borrowerName: string
+  itemName: string
+  category: string
+  damageDate: string
+  condition: ItemCondition
+  damagedQuantity: number
+  lostQuantity: number
+  returnNotes: string
+  estimatedCost: number
+  severity: 'minor' | 'major' | 'total'
+}
+
+interface UtilizationReportData {
+  itemId: string
+  itemName: string
+  category: string
+  totalBorrowings: number
+  totalDays: number
+  utilizationRate: number
+  averageBorrowDuration: number
+  popularityScore: number
+  lastBorrowed?: string
+  roi: number
+  recommendation: string
+}
+
+// Basic report data for borrowings and activities
 interface ReportData {
   id: string
   borrowerName: string
@@ -29,81 +74,128 @@ interface ReportData {
   status: string
 }
 
-// Component that uses useSearchParams - needs to be wrapped in Suspense
+type ReportType = 'borrowings' | 'activities' | 'conditions' | 'damages' | 'utilization'
+
 const ReportsContent: React.FC = () => {
   const searchParams = useSearchParams()
-  const [reportType, setReportType] = useState<'borrowings' | 'activities'>('borrowings')
+  const [reportType, setReportType] = useState<ReportType>('borrowings')
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: '',
     category: '',
     status: '',
-    activityType: ''
+    activityType: '',
+    condition: '',
+    damageLevel: '',
+    utilizationLevel: ''
   })
+
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+
+  // Data states
+  const [reportData, setReportData] = useState<ReportData[]>([])
   const [activitiesData, setActivitiesData] = useState<Activity[]>([])
-  const [isLoadingActivities, setIsLoadingActivities] = useState(false)
+  const [conditionData, setConditionData] = useState<ConditionReportData[]>([])
+  const [damageData, setDamageData] = useState<DamageReportData[]>([])
+  const [utilizationData, setUtilizationData] = useState<UtilizationReportData[]>([])
 
   // Pre-fill filters from URL params (from Calendar integration)
   useEffect(() => {
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
-    const category = searchParams.get('category')
-    const status = searchParams.get('status')
-    const type = searchParams.get('type')
-
-    if (dateFrom || dateTo || category || status || type) {
-      setFilters({
+    if (dateFrom || dateTo) {
+      setFilters(prev => ({
+        ...prev,
         dateFrom: dateFrom || '',
-        dateTo: dateTo || '',
-        category: category || '',
-        status: status || '',
-        activityType: type || ''
-      })
-
-      // If coming from calendar with activity type, switch to activities report
-      if (type) {
-        setReportType('activities')
-      }
+        dateTo: dateTo || ''
+      }))
     }
   }, [searchParams])
 
-  // Fetch activities data when needed
-  const fetchActivities = async () => {
-    setIsLoadingActivities(true)
-    try {
-      const params = new URLSearchParams()
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-      if (filters.dateTo) params.append('dateTo', filters.dateTo)
-      if (filters.activityType) params.append('type', filters.activityType)
+  // Fetch data based on report type
+  useEffect(() => {
+    fetchReportData()
+  }, [reportType, filters.dateFrom, filters.dateTo, filters.category, filters.status, filters.activityType, filters.condition, filters.damageLevel, filters.utilizationLevel, fetchReportData])
 
-      const response = await fetch(`/api/activities?${params.toString()}`)
+  const fetchReportData = async () => {
+    setIsLoading(true)
+    try {
+      const queryParams = new URLSearchParams()
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value)
+      })
+
+      let endpoint = ''
+      switch (reportType) {
+        case 'borrowings':
+          endpoint = `/api/borrowings?${queryParams}`
+          break
+        case 'activities':
+          endpoint = `/api/activities?${queryParams}`
+          break
+        case 'conditions':
+          endpoint = `/api/reports/conditions?${queryParams}`
+          break
+        case 'damages':
+          endpoint = `/api/reports/damages?${queryParams}`
+          break
+        case 'utilization':
+          endpoint = `/api/reports/utilization?${queryParams}`
+          break
+        default:
+          return
+      }
+
+      const response = await fetch(endpoint)
       if (response.ok) {
         const data = await response.json()
-        setActivitiesData((data.data as Activity[]) || [])
+
+        switch (reportType) {
+          case 'borrowings':
+            // Transform borrowing data to report format
+            const borrowings = data.data || []
+            const transformedData = borrowings.flatMap((borrowing: Record<string, unknown>) =>
+              borrowing.items?.map((item: Record<string, unknown>) => ({
+                id: borrowing.id,
+                borrowerName: borrowing.borrowerName,
+                itemName: item.item?.name || 'Unknown',
+                category: item.item?.category?.name || 'Unknown',
+                borrowDate: borrowing.borrowDate,
+                returnDate: borrowing.returnDate,
+                purpose: borrowing.purpose,
+                status: borrowing.status
+              })) || []
+            )
+            setReportData(transformedData)
+            break
+          case 'activities':
+            setActivitiesData(data.data || [])
+            break
+          case 'conditions':
+            setConditionData(data.data || [])
+            break
+          case 'damages':
+            setDamageData(data.data || [])
+            break
+          case 'utilization':
+            setUtilizationData(data.data || [])
+            break
+        }
       }
     } catch (error) {
-      console.error('Error fetching activities:', error)
-      setActivitiesData([])
+      console.error('Error fetching report data:', error)
     } finally {
-      setIsLoadingActivities(false)
+      setIsLoading(false)
     }
   }
-
-  // Fetch activities when report type changes to activities or filters change
-  useEffect(() => {
-    if (reportType === 'activities') {
-      fetchActivities()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, filters.dateFrom, filters.dateTo, filters.activityType])
 
   const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleReportTypeChange = (type: 'borrowings' | 'activities') => {
+  const handleReportTypeChange = (type: ReportType) => {
     setReportType(type)
     setExportMessage(null)
   }
@@ -116,8 +208,7 @@ const ReportsContent: React.FC = () => {
       let result
 
       if (reportType === 'borrowings') {
-        // Convert ReportData to BorrowingForExport format
-        const borrowingExportData = filteredData.map(item => ({
+        const exportData = prepareBorrowingDataForExport(reportData.map(item => ({
           id: item.id,
           borrowerName: item.borrowerName,
           borrowDate: item.borrowDate,
@@ -129,125 +220,78 @@ const ReportsContent: React.FC = () => {
               name: item.itemName,
               category: { name: item.category }
             },
-            quantity: 1, // Default quantity since ReportData doesn't have this
-            returnedQuantity: item.status === 'Dikembalikan' ? 1 : 0
+            quantity: 1,
+            returnedQuantity: item.status === 'RETURNED' ? 1 : 0
           }]
-        }))
-
-        // Generate borrowings report
-        const exportData = prepareBorrowingDataForExport(borrowingExportData)
+        })))
 
         if (format === 'pdf') {
           result = await exportToPDF(exportData, filters)
         } else {
           result = await exportToExcel(exportData, filters)
         }
-      } else {
-        // Convert Activity to ActivityForExport format
-        const activityExportData = activitiesData.map(activity => ({
+      } else if (reportType === 'activities') {
+        const exportData = prepareActivityDataForExport(activitiesData.map(activity => ({
           ...activity,
-          createdAt: activity.createdAt.toISOString()
-        }))
-
-        // Generate activities report
-        const exportData = prepareActivityDataForExport(activityExportData)
+          createdAt: activity.createdAt.toString()
+        })))
 
         if (format === 'pdf') {
           result = await exportActivitiesToPDF(exportData, filters)
         } else {
           result = await exportActivitiesToExcel(exportData, filters)
         }
+      } else {
+        // For enhanced reports, create simple export
+        const timestamp = new Date().toISOString().split('T')[0]
+        const filename = `${reportType}-report-${timestamp}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+
+        // Simple implementation - in production, you'd want proper PDF/Excel generation
+        let dataToExport: Record<string, unknown>[] = []
+        switch (reportType) {
+          case 'conditions':
+            dataToExport = conditionData
+            break
+          case 'damages':
+            dataToExport = damageData
+            break
+          case 'utilization':
+            dataToExport = utilizationData
+            break
+        }
+
+        // Create and download JSON for now (in production, implement proper PDF/Excel)
+        const jsonData = JSON.stringify(dataToExport, null, 2)
+        const blob = new Blob([jsonData], { type: 'application/json' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename.replace('.pdf', '.json').replace('.xlsx', '.json')
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        result = { success: true, filename: a.download }
       }
 
-      if (result.success) {
+      if (result && result.success) {
         setExportMessage({
           type: 'success',
-          message: `Laporan ${reportType === 'borrowings' ? 'Peminjaman' : 'Aktivitas'} ${format.toUpperCase()} berhasil diunduh: ${result.filename}`
+          message: `Laporan ${reportType} berhasil diunduh: ${result.filename}`
         })
       } else {
-        setExportMessage({
-          type: 'error',
-          message: result.error || `Gagal generate laporan ${format.toUpperCase()}`
-        })
+        throw new Error('Export failed')
       }
     } catch (error) {
-      console.error('Export error:', error)
+      console.error('Error generating report:', error)
       setExportMessage({
         type: 'error',
-        message: `Terjadi kesalahan saat generate laporan ${format.toUpperCase()}`
+        message: `Gagal generate laporan ${format.toUpperCase()}`
       })
     } finally {
       setIsGenerating(false)
-
-      // Clear message after 5 seconds
-      setTimeout(() => {
-        setExportMessage(null)
-      }, 5000)
     }
-  }
-
-  // State for borrowings data
-  const [borrowingsData, setBorrowingsData] = useState<ReportData[]>([])
-  const [isLoadingBorrowings, setIsLoadingBorrowings] = useState(false)
-
-  // Fetch borrowings data
-  const fetchBorrowings = async () => {
-    setIsLoadingBorrowings(true)
-    try {
-      const params = new URLSearchParams()
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-      if (filters.dateTo) params.append('dateTo', filters.dateTo)
-      if (filters.category) params.append('category', filters.category)
-      if (filters.status) params.append('status', filters.status)
-
-      const response = await fetch(`/api/borrowings?${params.toString()}`)
-      if (response.ok) {
-        const data = await response.json()
-        // Transform data for report format
-        const transformedData = data.data?.map((borrowing: {
-          id: string;
-          borrowerName: string;
-          items?: Array<{ item: { name: string; category?: { name: string } } }>;
-          borrowDate: string;
-          returnDate?: string;
-          purpose: string;
-          status: string;
-        }) => ({
-          id: borrowing.id,
-          borrowerName: borrowing.borrowerName,
-          itemName: borrowing.items?.map((item) => item.item.name).join(', ') || '',
-          category: borrowing.items?.[0]?.item.category?.name || '',
-          borrowDate: borrowing.borrowDate,
-          returnDate: borrowing.returnDate || null,
-          purpose: borrowing.purpose,
-          status: borrowing.status === 'ACTIVE' ? 'Aktif' :
-                  borrowing.status === 'RETURNED' ? 'Dikembalikan' : 'Terlambat'
-        })) || []
-        setBorrowingsData(transformedData)
-      }
-    } catch (error) {
-      console.error('Error fetching borrowings:', error)
-      setBorrowingsData([])
-    } finally {
-      setIsLoadingBorrowings(false)
-    }
-  }
-
-  // Fetch borrowings when report type changes to borrowings or filters change
-  useEffect(() => {
-    if (reportType === 'borrowings') {
-      fetchBorrowings()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, filters.dateFrom, filters.dateTo, filters.category, filters.status])
-
-  const filteredData = borrowingsData
-
-  const summary = {
-    totalBorrowings: filteredData.length,
-    totalReturned: filteredData.filter(item => item.status === 'Dikembalikan').length,
-    totalActive: filteredData.filter(item => item.status === 'Aktif').length,
-    totalOverdue: filteredData.filter(item => item.status === 'Terlambat').length
   }
 
   return (
@@ -255,9 +299,9 @@ const ReportsContent: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reporting</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Reporting & Export</h1>
           <p className="text-gray-600 mt-1">
-            Generate dan unduh laporan aktivitas inventaris
+            Generate dan export laporan inventaris dalam berbagai format
           </p>
 
           {/* Pre-filled indicator */}
@@ -280,47 +324,110 @@ const ReportsContent: React.FC = () => {
         <Card className="glass">
           <CardHeader>
             <h3 className="text-lg font-semibold text-gray-900">Jenis Laporan</h3>
+            <p className="text-sm text-gray-600">Pilih jenis laporan yang ingin dibuat dan diexport</p>
           </CardHeader>
           <CardContent>
-            <div className="flex space-x-4">
-              <label className="flex items-center space-x-2 cursor-pointer">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Basic Reports */}
+              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                reportType === 'borrowings'
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}>
                 <input
                   type="radio"
                   name="reportType"
                   value="borrowings"
                   checked={reportType === 'borrowings'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as 'borrowings')}
-                  className="text-blue-600 focus:ring-blue-500"
+                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
+                  className="sr-only"
                 />
-                <span className="text-sm font-medium text-gray-700">Laporan Peminjaman</span>
+                <FileText className="h-8 w-8 text-blue-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Peminjaman</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Data peminjaman & pengembalian</p>
               </label>
-              <label className="flex items-center space-x-2 cursor-pointer">
+
+              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                reportType === 'activities'
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}>
                 <input
                   type="radio"
                   name="reportType"
                   value="activities"
                   checked={reportType === 'activities'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as 'activities')}
-                  className="text-blue-600 focus:ring-blue-500"
+                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
+                  className="sr-only"
                 />
-                <span className="text-sm font-medium text-gray-700">Laporan Aktivitas</span>
+                <ActivityIcon className="h-8 w-8 text-green-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Aktivitas</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Log semua aktivitas sistem</p>
+              </label>
+
+              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                reportType === 'conditions'
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="radio"
+                  name="reportType"
+                  value="conditions"
+                  checked={reportType === 'conditions'}
+                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
+                  className="sr-only"
+                />
+                <Package className="h-8 w-8 text-purple-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Kondisi Barang</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Analisis kondisi & maintenance</p>
+              </label>
+
+              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                reportType === 'damages'
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="radio"
+                  name="reportType"
+                  value="damages"
+                  checked={reportType === 'damages'}
+                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
+                  className="sr-only"
+                />
+                <AlertTriangle className="h-8 w-8 text-red-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Kerusakan</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Laporan kerusakan & biaya</p>
+              </label>
+
+              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                reportType === 'utilization'
+                  ? 'border-orange-500 bg-orange-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="radio"
+                  name="reportType"
+                  value="utilization"
+                  checked={reportType === 'utilization'}
+                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
+                  className="sr-only"
+                />
+                <BarChart3 className="h-8 w-8 text-orange-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Utilisasi</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Tingkat penggunaan barang</p>
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              {reportType === 'borrowings'
-                ? 'Laporan khusus data peminjaman dan pengembalian barang'
-                : 'Laporan semua aktivitas inventaris (tambah barang, update stok, peminjaman, dll)'
-              }
-            </p>
           </CardContent>
         </Card>
 
         {/* Filters */}
         <Card className="glass">
           <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Filter className="h-5 w-5 mr-2" />
-              Filter Laporan
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+              <Filter className="h-5 w-5" />
+              <span>Filter Laporan</span>
             </h3>
           </CardHeader>
           <CardContent>
@@ -337,273 +444,195 @@ const ReportsContent: React.FC = () => {
                 value={filters.dateTo}
                 onChange={(e) => handleFilterChange('dateTo', e.target.value)}
               />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                <select
+                  value={filters.category}
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Semua Kategori</option>
+                  <option value="Elektronik">Elektronik</option>
+                  <option value="Furniture">Furniture</option>
+                  <option value="Kendaraan">Kendaraan</option>
+                  <option value="Alat Tulis">Alat Tulis</option>
+                  <option value="Peralatan">Peralatan</option>
+                </select>
+              </div>
 
-              {reportType === 'borrowings' ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Kategori
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      value={filters.category}
-                      onChange={(e) => handleFilterChange('category', e.target.value)}
-                    >
-                      <option value="">Semua Kategori</option>
-                      <option value="Elektronik">Elektronik</option>
-                      <option value="Aksesoris">Aksesoris</option>
-                      <option value="Furniture">Furniture</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      value={filters.status}
-                      onChange={(e) => handleFilterChange('status', e.target.value)}
-                    >
-                      <option value="">Semua Status</option>
-                      <option value="Aktif">Aktif</option>
-                      <option value="Dikembalikan">Dikembalikan</option>
-                      <option value="Terlambat">Terlambat</option>
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Jenis Aktivitas
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      value={filters.activityType}
-                      onChange={(e) => handleFilterChange('activityType', e.target.value)}
-                    >
-                      <option value="">Semua Aktivitas</option>
-                      <option value="ITEM_ADDED">Barang Ditambahkan</option>
-                      <option value="ITEM_UPDATED">Barang Diperbarui</option>
-                      <option value="ITEM_DELETED">Barang Dihapus</option>
-                      <option value="ITEM_BORROWED">Peminjaman</option>
-                      <option value="ITEM_RETURNED">Pengembalian</option>
-                      <option value="STOCK_UPDATED">Update Stok</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Kategori Barang
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      value={filters.category}
-                      onChange={(e) => handleFilterChange('category', e.target.value)}
-                    >
-                      <option value="">Semua Kategori</option>
-                      <option value="Elektronik">Elektronik</option>
-                      <option value="Aksesoris">Aksesoris</option>
-                      <option value="Furniture">Furniture</option>
-                    </select>
-                  </div>
-                </>
+              {/* Report-specific filters */}
+              {reportType === 'borrowings' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Semua Status</option>
+                    <option value="ACTIVE">Sedang Dipinjam</option>
+                    <option value="RETURNED">Dikembalikan</option>
+                    <option value="OVERDUE">Terlambat</option>
+                  </select>
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="glass">
-            <CardContent className="p-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{summary.totalBorrowings}</p>
-                <p className="text-sm text-gray-600">Total Peminjaman</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass">
-            <CardContent className="p-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">{summary.totalReturned}</p>
-                <p className="text-sm text-gray-600">Dikembalikan</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass">
-            <CardContent className="p-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-yellow-600">{summary.totalActive}</p>
-                <p className="text-sm text-gray-600">Aktif</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass">
-            <CardContent className="p-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-red-600">{summary.totalOverdue}</p>
-                <p className="text-sm text-gray-600">Terlambat</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Export Message */}
-        {exportMessage && (
-          <div className={`p-4 rounded-lg border ${
-            exportMessage.type === 'success'
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">{exportMessage.message}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Generate Reports */}
-        <Card className="glass">
-          <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Download className="h-5 w-5 mr-2" />
-              Generate Laporan
-            </h3>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button
-                onClick={() => handleGenerateReport('pdf')}
-                loading={isGenerating}
-                disabled={
-                  (reportType === 'borrowings' && filteredData.length === 0) ||
-                  (reportType === 'activities' && (activitiesData.length === 0 || isLoadingActivities))
-                }
-                className="flex items-center space-x-2"
-              >
-                <FileText className="h-4 w-4" />
-                <span>{isGenerating ? 'Generating PDF...' : 'Download PDF'}</span>
-              </Button>
-              <Button
-                onClick={() => handleGenerateReport('excel')}
-                loading={isGenerating}
-                disabled={
-                  (reportType === 'borrowings' && filteredData.length === 0) ||
-                  (reportType === 'activities' && (activitiesData.length === 0 || isLoadingActivities))
-                }
-                variant="outline"
-                className="flex items-center space-x-2"
-              >
-                <FileText className="h-4 w-4" />
-                <span>{isGenerating ? 'Generating Excel...' : 'Download Excel'}</span>
-              </Button>
-            </div>
-            <div className="mt-3 space-y-1">
-              <p className="text-sm text-gray-500">
-                {reportType === 'borrowings'
-                  ? `Laporan peminjaman akan mencakup ${filteredData.length} record`
-                  : `Laporan aktivitas akan mencakup ${activitiesData.length} record`
-                }
-                {isLoadingActivities && reportType === 'activities' && ' (Loading...)'}
-              </p>
-              {((reportType === 'borrowings' && filteredData.length === 0) ||
-                (reportType === 'activities' && activitiesData.length === 0 && !isLoadingActivities)) && (
-                <p className="text-sm text-red-600">
-                  Tidak ada data untuk diekspor. Silakan sesuaikan filter.
-                </p>
+              {reportType === 'activities' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Jenis Aktivitas</label>
+                  <select
+                    value={filters.activityType}
+                    onChange={(e) => handleFilterChange('activityType', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Semua Aktivitas</option>
+                    <option value="ITEM_ADDED">Barang Ditambah</option>
+                    <option value="ITEM_UPDATED">Barang Diupdate</option>
+                    <option value="ITEM_BORROWED">Barang Dipinjam</option>
+                    <option value="ITEM_RETURNED">Barang Dikembalikan</option>
+                    <option value="ITEM_DAMAGED">Barang Rusak</option>
+                    <option value="ITEM_LOST">Barang Hilang</option>
+                    <option value="STOCK_UPDATED">Stok Diupdate</option>
+                  </select>
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Preview Data */}
-        <Card className="glass">
-          <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900">
-              Preview Data Laporan
-            </h3>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Peminjam</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Barang</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Kategori</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Tanggal Pinjam</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Tanggal Kembali</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Tujuan</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.map((item) => (
-                    <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-700">{item.borrowerName}</td>
-                      <td className="py-3 px-4 text-gray-700">{item.itemName}</td>
-                      <td className="py-3 px-4 text-gray-700">{item.category}</td>
-                      <td className="py-3 px-4 text-gray-700">
-                        {new Date(item.borrowDate).toLocaleDateString('id-ID')}
-                      </td>
-                      <td className="py-3 px-4 text-gray-700">
-                        {item.returnDate
-                          ? new Date(item.returnDate).toLocaleDateString('id-ID')
-                          : '-'
-                        }
-                      </td>
-                      <td className="py-3 px-4 text-gray-700">{item.purpose}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          item.status === 'Dikembalikan' ? 'text-green-600 bg-green-100' :
-                          item.status === 'Aktif' ? 'text-blue-600 bg-blue-100' :
-                          'text-red-600 bg-red-100'
-                        }`}>
-                          {item.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {reportType === 'conditions' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kondisi</label>
+                  <select
+                    value={filters.condition}
+                    onChange={(e) => handleFilterChange('condition', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Semua Kondisi</option>
+                    <option value="GOOD">Baik</option>
+                    <option value="DAMAGED">Rusak</option>
+                    <option value="LOST">Hilang</option>
+                    <option value="INCOMPLETE">Tidak Lengkap</option>
+                  </select>
+                </div>
+              )}
 
-              {(isLoadingBorrowings || (reportType === 'borrowings' && filteredData.length === 0)) && (
-                <div className="text-center py-8 text-gray-500">
-                  {isLoadingBorrowings ? 'Memuat data...' : 'Tidak ada data yang sesuai dengan filter yang dipilih'}
+              {reportType === 'damages' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Kerusakan</label>
+                  <select
+                    value={filters.damageLevel}
+                    onChange={(e) => handleFilterChange('damageLevel', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Semua Tingkat</option>
+                    <option value="minor">Kerusakan Ringan</option>
+                    <option value="major">Kerusakan Berat</option>
+                    <option value="total">Rusak Total</option>
+                    <option value="lost">Hilang</option>
+                  </select>
+                </div>
+              )}
+
+              {reportType === 'utilization' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Utilisasi</label>
+                  <select
+                    value={filters.utilizationLevel}
+                    onChange={(e) => handleFilterChange('utilizationLevel', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Semua Tingkat</option>
+                    <option value="high">Tinggi (&gt;80%)</option>
+                    <option value="medium">Sedang (40-80%)</option>
+                    <option value="low">Rendah (&lt;40%)</option>
+                    <option value="unused">Tidak Pernah Dipinjam</option>
+                  </select>
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Report Templates */}
+        {/* Generate Reports */}
         <Card className="glass">
           <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900">
-              Template Laporan
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Download className="h-5 w-5 mr-2" />
+              Generate & Export Laporan
             </h3>
+            <p className="text-sm text-gray-600">Export laporan dalam format PDF atau Excel</p>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                <h4 className="font-medium text-gray-900 mb-2">📊 Laporan Bulanan</h4>
-                <p className="text-sm text-gray-600">
-                  Ringkasan aktivitas peminjaman dalam satu bulan terakhir
-                </p>
-              </div>
-              <div className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                <h4 className="font-medium text-gray-900 mb-2">🔍 Laporan Detail</h4>
-                <p className="text-sm text-gray-600">
-                  Laporan lengkap dengan semua detail peminjaman dan pengembalian
-                </p>
-              </div>
-              <div className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                <h4 className="font-medium text-gray-900 mb-2">⚠️ Laporan Overdue</h4>
-                <p className="text-sm text-gray-600">
-                  Daftar peminjaman yang terlambat dikembalikan
-                </p>
-              </div>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button
+                onClick={() => handleGenerateReport('pdf')}
+                loading={isGenerating}
+                disabled={isLoading}
+                className="flex items-center space-x-2 bg-red-600 hover:bg-red-700"
+              >
+                <FileText className="h-4 w-4" />
+                <span>Download PDF</span>
+              </Button>
+
+              <Button
+                onClick={() => handleGenerateReport('excel')}
+                loading={isGenerating}
+                disabled={isLoading}
+                variant="outline"
+                className="flex items-center space-x-2 border-green-600 text-green-600 hover:bg-green-50"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download Excel</span>
+              </Button>
             </div>
+
+            {exportMessage && (
+              <div className={`mt-4 p-3 rounded-lg ${
+                exportMessage.type === 'success'
+                  ? 'bg-green-50 border border-green-200 text-green-800'
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  {exportMessage.type === 'success' ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" />
+                  )}
+                  <span className="text-sm font-medium">{exportMessage.message}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Data Preview */}
+            {!isLoading && (
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">Preview Data</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Total Records:</span>
+                    <span className="ml-2 font-medium">
+                      {reportType === 'borrowings' ? reportData.length :
+                       reportType === 'activities' ? activitiesData.length :
+                       reportType === 'conditions' ? conditionData.length :
+                       reportType === 'damages' ? damageData.length :
+                       reportType === 'utilization' ? utilizationData.length : 0}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Report Type:</span>
+                    <span className="ml-2 font-medium capitalize">{reportType}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Date Range:</span>
+                    <span className="ml-2 font-medium">
+                      {filters.dateFrom || 'All'} - {filters.dateTo || 'All'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Category:</span>
+                    <span className="ml-2 font-medium">{filters.category || 'All'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -611,20 +640,18 @@ const ReportsContent: React.FC = () => {
   )
 }
 
-// Loading component for Suspense fallback
+// Loading component
 const ReportsLoading: React.FC = () => {
   return (
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reporting</h1>
-          <p className="text-gray-600 mt-1">
-            Generate dan unduh laporan aktivitas inventaris
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Reporting & Export</h1>
+          <p className="text-gray-600 mt-1">Loading...</p>
         </div>
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600">Loading...</span>
+          <span className="ml-3 text-gray-600">Loading reports...</span>
         </div>
       </div>
     </AppLayout>
