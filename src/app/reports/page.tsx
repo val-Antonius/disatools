@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -116,12 +116,9 @@ const ReportsContent: React.FC = () => {
 
   // Fetch data based on report type
   useEffect(() => {
-    fetchReportData()
-  }, [reportType, filters.dateFrom, filters.dateTo, filters.category, filters.status, filters.activityType, filters.condition, filters.damageLevel, filters.utilizationLevel, fetchReportData])
-
-  const fetchReportData = async () => {
-    setIsLoading(true)
-    try {
+    const fetchReportData = async () => {
+      setIsLoading(true)
+      try {
       const queryParams = new URLSearchParams()
       Object.entries(filters).forEach(([key, value]) => {
         if (value) queryParams.append(key, value)
@@ -151,36 +148,21 @@ const ReportsContent: React.FC = () => {
       const response = await fetch(endpoint)
       if (response.ok) {
         const data = await response.json()
-
         switch (reportType) {
           case 'borrowings':
-            // Transform borrowing data to report format
-            const borrowings = data.data || []
-            const transformedData = borrowings.flatMap((borrowing: Record<string, unknown>) =>
-              borrowing.items?.map((item: Record<string, unknown>) => ({
-                id: borrowing.id,
-                borrowerName: borrowing.borrowerName,
-                itemName: item.item?.name || 'Unknown',
-                category: item.item?.category?.name || 'Unknown',
-                borrowDate: borrowing.borrowDate,
-                returnDate: borrowing.returnDate,
-                purpose: borrowing.purpose,
-                status: borrowing.status
-              })) || []
-            )
-            setReportData(transformedData)
+            setReportData(data)
             break
           case 'activities':
-            setActivitiesData(data.data || [])
+            setActivitiesData(data)
             break
           case 'conditions':
-            setConditionData(data.data || [])
+            setConditionData(data)
             break
           case 'damages':
-            setDamageData(data.data || [])
+            setDamageData(data)
             break
           case 'utilization':
-            setUtilizationData(data.data || [])
+            setUtilizationData(data)
             break
         }
       }
@@ -190,6 +172,8 @@ const ReportsContent: React.FC = () => {
       setIsLoading(false)
     }
   }
+  fetchReportData()
+}, [reportType, filters])
 
   const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({ ...prev, [field]: value }))
@@ -250,13 +234,13 @@ const ReportsContent: React.FC = () => {
         let dataToExport: Record<string, unknown>[] = []
         switch (reportType) {
           case 'conditions':
-            dataToExport = conditionData
+            dataToExport = conditionData.map(item => ({ ...item } as Record<string, unknown>))
             break
           case 'damages':
-            dataToExport = damageData
+            dataToExport = damageData.map(item => ({ ...item } as Record<string, unknown>))
             break
           case 'utilization':
-            dataToExport = utilizationData
+            dataToExport = utilizationData.map(item => ({ ...item } as Record<string, unknown>))
             break
         }
 

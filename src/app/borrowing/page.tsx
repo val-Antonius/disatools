@@ -817,7 +817,7 @@ const BorrowingPage: React.FC = () => {
                   <h4 className="font-medium text-gray-900 mb-3">Barang yang Dikembalikan</h4>
                   <div className="space-y-4">
                     {returnData.items.map((returnItem, index) => {
-                      const borrowingItem = sidebar.data.items?.find(item => item.id === returnItem.borrowingItemId)
+                      const borrowingItem = sidebar.data.items?.find((item: { id: string; quantity: number; returnedQuantity: number }) => item.id === returnItem.borrowingItemId)
                       if (!borrowingItem) return null
 
                       const maxReturn = borrowingItem.quantity - borrowingItem.returnedQuantity
@@ -978,7 +978,7 @@ const BorrowingPage: React.FC = () => {
                 <Download className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Generate Report</h3>
                 <p className="text-gray-600 mb-4">Export {sidebar.data?.selectedIds?.length} riwayat terpilih</p>
-                <Button className="w-full">
+                <Button variant="primary" className="w-full">
                   <Download className="h-4 w-4 mr-2" />
                   Download Excel Report
                 </Button>
@@ -987,10 +987,6 @@ const BorrowingPage: React.FC = () => {
           )}
         </div>
       </div>
-    )
-  }
-    </AppLayout>
   )
-}
-
-export default BorrowingPage
+  }}
+export default BorrowingPage;
