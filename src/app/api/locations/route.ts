@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// Ensure default location exists
+async function ensureDefaultLocation() {
+  await prisma.location.upsert({
+    where: { name: 'Gudang' },
+    update: {},
+    create: {
+      name: 'Gudang',
+      description: 'Lokasi penyimpanan utama'
+    }
+  })
+}
+
 // GET /api/locations - Get all locations
 export async function GET(_request: NextRequest) {
   try {
+    // Ensure default location exists
+    await ensureDefaultLocation()
+
     const locations = await prisma.location.findMany({
       include: {
         _count: {

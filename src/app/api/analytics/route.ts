@@ -112,7 +112,9 @@ export async function GET(_request: NextRequest) {
     const [
       totalBorrowings,
       activeBorrowings,
-      overdueBorrowings
+      overdueBorrowings,
+      damagedItems,
+      damagedReturns
     ] = await Promise.all([
       prisma.borrowing.count(),
       prisma.borrowing.count({ where: { status: 'ACTIVE' } }),
@@ -120,6 +122,17 @@ export async function GET(_request: NextRequest) {
         where: {
           status: 'ACTIVE',
           expectedReturnDate: { lt: new Date() }
+        }
+      }),
+      // Count items with damaged condition
+      prisma.item.count({
+        where: { condition: 'DAMAGED' }
+      }),
+      // Count borrowing items returned with damaged condition
+      prisma.borrowingItem.count({
+        where: {
+          condition: 'DAMAGED',
+          status: 'RETURNED'
         }
       })
     ])
@@ -155,6 +168,8 @@ export async function GET(_request: NextRequest) {
         totalBorrowings,
         activeBorrowings,
         overdueBorrowings,
+        damagedItems,
+        damagedReturns,
         avgBorrowingDuration: Math.round(avgBorrowingDuration * 100) / 100,
         returnRate: totalBorrowings > 0 ? Math.round(((totalBorrowings - activeBorrowings) / totalBorrowings) * 100) : 0
       }

@@ -10,6 +10,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enum untuk tipe kategori
+enum CategoryType {
+  MATERIAL    // Sekali pakai, langsung habis
+  TOOL        // Bisa dipinjam dan dikembalikan
+}
+
 // Enum untuk status barang
 enum ItemStatus {
   AVAILABLE
@@ -17,11 +23,20 @@ enum ItemStatus {
   DISCONTINUED
 }
 
-// Enum untuk status peminjaman
+// Enum untuk status peminjaman (backward compatibility)
 enum BorrowingStatus {
   ACTIVE
   RETURNED
   OVERDUE
+}
+
+// Enum untuk status peminjaman/permintaan
+enum TransactionStatus {
+  ACTIVE      // Sedang dipinjam (tools) / Diproses (materials)
+  RETURNED    // Dikembalikan (tools only)
+  CONSUMED    // Habis dipakai (materials only)
+  OVERDUE     // Terlambat (tools only)
+  CANCELLED   // Dibatalkan
 }
 
 // Enum untuk kondisi barang saat pengembalian
@@ -39,18 +54,27 @@ enum ActivityType {
   ITEM_DELETED
   ITEM_BORROWED
   ITEM_RETURNED
+  MATERIAL_REQUESTED
+  MATERIAL_CONSUMED
   STOCK_UPDATED
   ITEM_DAMAGED
   ITEM_LOST
 }
 
+// Enum untuk tipe transaksi
+enum TransactionType {
+  BORROWING   // Peminjaman tools
+  REQUEST     // Permintaan materials
+}
+
 // Model untuk kategori barang
 model Category {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String       @id @default(cuid())
+  name        String       @unique
+  type        CategoryType @default(TOOL) // MATERIAL atau TOOL
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   // Relasi
   items       Item[]
@@ -74,65 +98,114 @@ model Location {
 
 // Model untuk barang/item
 model Item {
-  id          String     @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
   description String?
-  stock       Int        @default(0)
-  minStock    Int        @default(5) // Minimum stock untuk alert
-  status      ItemStatus @default(AVAILABLE)
+  imageUrl    String?       // URL foto item
+  stock       Int           @default(0)
+  minStock    Int           @default(5) // Minimum stock untuk alert
+  status      ItemStatus    @default(AVAILABLE)
+  condition   ItemCondition @default(GOOD) // Kondisi item saat ini
   categoryId  String
   locationId  String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   // Relasi
-  category    Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  location    Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  borrowingItems BorrowingItem[] // Updated relation
-  activities  Activity[]
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  location        Location         @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  borrowingItems  BorrowingItem[]  // Backward compatibility
+  transactionItems TransactionItem[] // New unified relation
+  activities      Activity[]
 
   @@map("items")
 }
 
-// Model untuk peminjaman (header)
-model Borrowing {
-  id           String          @id @default(cuid())
-  borrowerName String
-  purpose      String
-  borrowDate   DateTime        @default(now())
-  returnDate   DateTime?
-  expectedReturnDate DateTime
-  status       BorrowingStatus @default(ACTIVE)
-  notes        String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+// Model untuk transaksi (unified untuk borrowing dan request)
+model Transaction {
+  id                 String            @id @default(cuid())
+  type               TransactionType   // BORROWING atau REQUEST
+  requesterName      String            // Nama peminjam/peminta
+  purpose            String            // Tujuan penggunaan
+  transactionDate    DateTime          @default(now())
+  returnDate         DateTime?         // Untuk tools saja
+  expectedReturnDate DateTime?         // Untuk tools saja
+  consumedDate       DateTime?         // Untuk materials saja
+  status             TransactionStatus @default(ACTIVE)
+  notes              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   // Relasi
-  items        BorrowingItem[] // One-to-many dengan BorrowingItem
-  activities   Activity[]
+  items              TransactionItem[] // One-to-many dengan TransactionItem
+  activities         Activity[]
+
+  @@map("transactions")
+}
+
+// Model untuk detail item dalam transaksi
+model TransactionItem {
+  id                String            @id @default(cuid())
+  transactionId     String
+  itemId            String
+  quantity          Int
+  returnedQuantity  Int               @default(0) // Untuk tools
+  consumedQuantity  Int               @default(0) // Untuk materials
+  damagedQuantity   Int               @default(0) // Jumlah barang rusak
+  lostQuantity      Int               @default(0) // Jumlah barang hilang
+  status            TransactionStatus @default(ACTIVE)
+  condition         ItemCondition?    // Kondisi saat pengembalian (tools)
+  returnNotes       String?           // Catatan khusus pengembalian
+  notes             String?           // Catatan umum
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relasi
+  transaction       Transaction       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  item              Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("transaction_items")
+}
+
+// Model untuk peminjaman (backward compatibility)
+model Borrowing {
+  id                 String          @id @default(cuid())
+  borrowerName       String
+  purpose            String
+  borrowDate         DateTime        @default(now())
+  returnDate         DateTime?
+  expectedReturnDate DateTime
+  status             BorrowingStatus @default(ACTIVE)
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Relasi
+  items              BorrowingItem[] // One-to-many dengan BorrowingItem
+  activities         Activity[]
 
   @@map("borrowings")
 }
 
-// Model untuk detail item dalam peminjaman
+// Model untuk detail item dalam peminjaman (backward compatibility)
 model BorrowingItem {
-  id          String    @id @default(cuid())
-  borrowingId String
-  itemId      String
-  quantity    Int
-  returnedQuantity Int @default(0)
-  damagedQuantity  Int @default(0)  // Jumlah barang rusak
-  lostQuantity     Int @default(0)  // Jumlah barang hilang
-  status      BorrowingStatus @default(ACTIVE)
-  condition   ItemCondition?        // Kondisi saat pengembalian
-  returnNotes String?               // Catatan khusus pengembalian
-  notes       String?               // Catatan umum
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id               String          @id @default(cuid())
+  borrowingId      String
+  itemId           String
+  quantity         Int
+  returnedQuantity Int             @default(0)
+  damagedQuantity  Int             @default(0) // Jumlah barang rusak
+  lostQuantity     Int             @default(0) // Jumlah barang hilang
+  status           BorrowingStatus @default(ACTIVE)
+  condition        ItemCondition?  // Kondisi saat pengembalian
+  returnNotes      String?         // Catatan khusus pengembalian
+  notes            String?         // Catatan umum
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   // Relasi
-  borrowing   Borrowing @relation(fields: [borrowingId], references: [id], onDelete: Cascade)
-  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrowing        Borrowing       @relation(fields: [borrowingId], references: [id], onDelete: Cascade)
+  item             Item            @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@map("borrowing_items")
 }
@@ -154,18 +227,20 @@ model FrequentBorrower {
 
 // Model untuk log aktivitas
 model Activity {
-  id          String       @id @default(cuid())
-  type        ActivityType
-  description String
-  itemId      String?
-  borrowingId String?
-  userId      String?      // Untuk future user management
-  metadata    Json?        // Data tambahan dalam format JSON
-  createdAt   DateTime     @default(now())
+  id            String       @id @default(cuid())
+  type          ActivityType
+  description   String
+  itemId        String?
+  borrowingId   String?      // Backward compatibility
+  transactionId String?      // New unified relation
+  userId        String?      // Untuk future user management
+  metadata      Json?        // Data tambahan dalam format JSON
+  createdAt     DateTime     @default(now())
 
   // Relasi
-  item        Item?        @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  borrowing   Borrowing?   @relation(fields: [borrowingId], references: [id], onDelete: Cascade)
+  item          Item?        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrowing     Borrowing?   @relation(fields: [borrowingId], references: [id], onDelete: Cascade)
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@map("activities")
 }

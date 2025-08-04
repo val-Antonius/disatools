@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { Plus, Search, ArrowLeft, Clock, CheckCircle, Package, Calendar, User, FileText, AlertTriangle, Eye, RotateCcw, X, Download, Trash2, Filter, List, Grid3X3 } from 'lucide-react'
 import { BorrowingStatus, Borrowing, Item, BorrowingFormData, ReturnData, ItemCondition } from '@/types'
+import { useNotifications } from '@/components/ui/NotificationProvider'
 
 // Enhanced status system with visual indicators
 const getStatusConfig = (status: BorrowingStatus, isOverdue = false) => {
@@ -70,6 +71,9 @@ const isOverdue = (expectedReturnDate: Date | string, status: BorrowingStatus) =
 }
 
 const BorrowingPage: React.FC = () => {
+  // Notification system
+  const { success, error, warning } = useNotifications()
+
   // Existing states
   const [borrowings, setBorrowings] = useState<Borrowing[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -210,15 +214,15 @@ const BorrowingPage: React.FC = () => {
       if (failedDeletes.length === 0) {
         await fetchBorrowings()
         setSelectedItems(new Set())
-        alert(`${selectedItems.size} riwayat berhasil dihapus`)
+        success('Penghapusan berhasil', `${selectedItems.size} riwayat berhasil dihapus`)
       } else {
-        alert(`${results.length - failedDeletes.length} riwayat berhasil dihapus, ${failedDeletes.length} riwayat gagal dihapus`)
+        warning('Penghapusan sebagian berhasil', `${results.length - failedDeletes.length} riwayat berhasil dihapus, ${failedDeletes.length} riwayat gagal dihapus`)
         await fetchBorrowings()
         setSelectedItems(new Set())
       }
-    } catch (error) {
-      console.error('Error bulk deleting borrowings:', error)
-      alert('Gagal menghapus riwayat')
+    } catch (err) {
+      console.error('Error bulk deleting borrowings:', err)
+      error('Gagal menghapus riwayat', 'Terjadi kesalahan saat menghapus riwayat')
     } finally {
       setIsLoading(false)
     }
@@ -712,14 +716,14 @@ const BorrowingPage: React.FC = () => {
         if (response.ok) {
           onSubmit()
           onClose()
-          alert('Barang berhasil dikembalikan')
+          success('Pengembalian berhasil', 'Barang berhasil dikembalikan')
         } else {
-          const error = await response.json()
-          alert(error.error || 'Gagal mengembalikan barang')
+          const errorData = await response.json()
+          error('Gagal mengembalikan barang', errorData.error || 'Terjadi kesalahan saat mengembalikan barang')
         }
-      } catch (error) {
-        console.error('Error returning items:', error)
-        alert('Gagal mengembalikan barang')
+      } catch (err) {
+        console.error('Error returning items:', err)
+        error('Gagal mengembalikan barang', 'Terjadi kesalahan saat mengembalikan barang')
       } finally {
         setIsLoading(false)
       }

@@ -17,8 +17,16 @@ const getActivityColor = (type: ActivityType) => {
       return 'bg-blue-500'
     case ActivityType.ITEM_RETURNED:
       return 'bg-orange-500'
-    case ActivityType.STOCK_UPDATED:
+    case ActivityType.MATERIAL_REQUESTED:
       return 'bg-purple-500'
+    case ActivityType.MATERIAL_CONSUMED:
+      return 'bg-purple-600'
+    case ActivityType.STOCK_UPDATED:
+      return 'bg-indigo-500'
+    case ActivityType.ITEM_DAMAGED:
+      return 'bg-red-500'
+    case ActivityType.ITEM_LOST:
+      return 'bg-red-600'
     default:
       return 'bg-gray-500'
   }
@@ -32,8 +40,16 @@ const getActivityIcon = (type: ActivityType) => {
       return <ArrowRightLeft className="h-3 w-3" />
     case ActivityType.ITEM_RETURNED:
       return <RotateCcw className="h-3 w-3" />
+    case ActivityType.MATERIAL_REQUESTED:
+      return <Package className="h-3 w-3" />
+    case ActivityType.MATERIAL_CONSUMED:
+      return <Package className="h-3 w-3" />
     case ActivityType.STOCK_UPDATED:
       return <Package className="h-3 w-3" />
+    case ActivityType.ITEM_DAMAGED:
+      return <FileText className="h-3 w-3" />
+    case ActivityType.ITEM_LOST:
+      return <FileText className="h-3 w-3" />
     default:
       return <CalendarIcon className="h-3 w-3" />
   }
@@ -91,11 +107,42 @@ const CalendarPage: React.FC = () => {
         dateTo: lastDay.toISOString().split('T')[0]
       })
 
-      const response = await fetch(`/api/activities?${params.toString()}`)
-      if (response.ok) {
-        const data = await response.json()
-        setEvents((data.data as ActivityInterface[]) || [])
+      // Fetch both activities and transactions for comprehensive calendar view
+      const [activitiesResponse, transactionsResponse] = await Promise.all([
+        fetch(`/api/activities?${params.toString()}`),
+        fetch(`/api/transactions?${params.toString()}`)
+      ])
+
+      const allEvents: ActivityInterface[] = []
+
+      if (activitiesResponse.ok) {
+        const activitiesData = await activitiesResponse.json()
+        allEvents.push(...((activitiesData.data as ActivityInterface[]) || []))
       }
+
+      if (transactionsResponse.ok) {
+        const transactionsData = await transactionsResponse.json()
+        const transactions = transactionsData.data || []
+
+        // Convert transactions to activity-like events for calendar display
+        const transactionEvents = transactions.map((transaction: any) => ({
+          id: `transaction-${transaction.id}`,
+          type: transaction.type === 'REQUEST' ? ActivityType.MATERIAL_REQUESTED : ActivityType.ITEM_BORROWED,
+          description: `${transaction.type === 'REQUEST' ? 'Material diminta' : 'Tool dipinjam'} oleh ${transaction.requesterName}: ${transaction.purpose}`,
+          createdAt: transaction.transactionDate,
+          metadata: {
+            transactionId: transaction.id,
+            requesterName: transaction.requesterName,
+            purpose: transaction.purpose,
+            itemCount: transaction.items?.length || 0,
+            transactionType: transaction.type
+          }
+        }))
+
+        allEvents.push(...transactionEvents)
+      }
+
+      setEvents(allEvents)
     } catch (error) {
       console.error('Error fetching activities:', error)
       setEvents([])
@@ -136,20 +183,20 @@ const CalendarPage: React.FC = () => {
     }
   }
 
-  const handleCreateReport = (activityType?: string) => {
+  const handleCreateReport = (reportType?: string) => {
     if (!selectedDate) return
 
     // Format dates for URL params
     const dateStr = selectedDate.toISOString().split('T')[0]
 
-    // Navigate to reports page with pre-filled date and activity type
+    // Navigate to reports page with pre-filled date and report type
     const params = new URLSearchParams({
       dateFrom: dateStr,
       dateTo: dateStr
     })
 
-    if (activityType) {
-      params.append('type', activityType)
+    if (reportType) {
+      params.append('reportType', reportType)
     }
 
     router.push(`/reports?${params.toString()}`)
@@ -177,10 +224,10 @@ const CalendarPage: React.FC = () => {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center px-6 py-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Kalender</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl font-bold text-gray-900">Kalender</h1>
+            <p className="text-gray-600 text-sm">
               Lihat aktivitas inventaris berdasarkan tanggal
             </p>
           </div>
@@ -394,52 +441,44 @@ const CalendarPage: React.FC = () => {
                       <span>Semua Aktivitas</span>
                     </Button>
 
-                    {/* Show specific activity type buttons if they exist */}
-                    {selectedDateEvents.some(e => e.type === ActivityType.ITEM_BORROWED) && (
+                    {/* Show specific activity type buttons based on new report types */}
+                    {(selectedDateEvents.some(e => e.type === ActivityType.ITEM_BORROWED) ||
+                      selectedDateEvents.some(e => e.type === ActivityType.ITEM_RETURNED)) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport(ActivityType.ITEM_BORROWED)}
+                        onClick={() => handleCreateReport('tools')}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
-                        <span>Peminjaman</span>
+                        <span>Tools</span>
                       </Button>
                     )}
 
-                    {selectedDateEvents.some(e => e.type === ActivityType.ITEM_RETURNED) && (
+                    {(selectedDateEvents.some(e => e.type === ActivityType.MATERIAL_REQUESTED) ||
+                      selectedDateEvents.some(e => e.type === ActivityType.MATERIAL_CONSUMED)) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport(ActivityType.ITEM_RETURNED)}
+                        onClick={() => handleCreateReport('materials')}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
-                        <span>Pengembalian</span>
+                        <span>Materials</span>
                       </Button>
                     )}
 
-                    {selectedDateEvents.some(e => e.type === ActivityType.STOCK_UPDATED) && (
+                    {(selectedDateEvents.some(e => e.type === ActivityType.ITEM_DAMAGED) ||
+                      selectedDateEvents.some(e => e.type === ActivityType.ITEM_LOST) ||
+                      selectedDateEvents.some(e => e.type === ActivityType.STOCK_UPDATED)) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleCreateReport(ActivityType.STOCK_UPDATED)}
+                        onClick={() => handleCreateReport('conditions')}
                         className="flex items-center space-x-1"
                       >
                         <FileText className="h-3 w-3" />
-                        <span>Update Stok</span>
-                      </Button>
-                    )}
-
-                    {selectedDateEvents.some(e => e.type === ActivityType.ITEM_ADDED) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCreateReport(ActivityType.ITEM_ADDED)}
-                        className="flex items-center space-x-1"
-                      >
-                        <FileText className="h-3 w-3" />
-                        <span>Barang Ditambahkan</span>
+                        <span>Kondisi & Utility</span>
                       </Button>
                     )}
                   </div>

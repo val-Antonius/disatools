@@ -62,7 +62,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, description, stock, minStock, categoryId, locationId, status } = body
+    const { name, description, imageUrl, stock, minStock, condition, categoryId, locationId, status } = body
 
     // Check if item exists
     const existingItem = await prisma.item.findUnique({
@@ -109,8 +109,10 @@ export async function PUT(
       data: {
         ...(name && { name }),
         ...(description !== undefined && { description }),
+        ...(imageUrl !== undefined && { imageUrl }),
         ...(stock !== undefined && { stock: parseInt(stock) }),
         ...(minStock !== undefined && { minStock: parseInt(minStock) }),
+        ...(condition && { condition }),
         ...(categoryId && { categoryId }),
         ...(locationId && { locationId }),
         ...(finalStatus && { status: finalStatus })

@@ -1,4 +1,9 @@
 // Enum types matching Prisma schema
+export enum CategoryType {
+  MATERIAL = 'MATERIAL',
+  TOOL = 'TOOL'
+}
+
 export enum ItemStatus {
   AVAILABLE = 'AVAILABLE',
   OUT_OF_STOCK = 'OUT_OF_STOCK',
@@ -9,6 +14,19 @@ export enum BorrowingStatus {
   ACTIVE = 'ACTIVE',
   RETURNED = 'RETURNED',
   OVERDUE = 'OVERDUE'
+}
+
+export enum TransactionStatus {
+  ACTIVE = 'ACTIVE',
+  RETURNED = 'RETURNED',
+  CONSUMED = 'CONSUMED',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED'
+}
+
+export enum TransactionType {
+  BORROWING = 'BORROWING',
+  REQUEST = 'REQUEST'
 }
 
 export enum ItemCondition {
@@ -24,6 +42,8 @@ export enum ActivityType {
   ITEM_DELETED = 'ITEM_DELETED',
   ITEM_BORROWED = 'ITEM_BORROWED',
   ITEM_RETURNED = 'ITEM_RETURNED',
+  MATERIAL_REQUESTED = 'MATERIAL_REQUESTED',
+  MATERIAL_CONSUMED = 'MATERIAL_CONSUMED',
   STOCK_UPDATED = 'STOCK_UPDATED',
   ITEM_DAMAGED = 'ITEM_DAMAGED',
   ITEM_LOST = 'ITEM_LOST'
@@ -33,6 +53,7 @@ export enum ActivityType {
 export interface Category {
   id: string;
   name: string;
+  type: CategoryType;
   description?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -52,9 +73,11 @@ export interface Item {
   id: string;
   name: string;
   description?: string;
+  imageUrl?: string;
   stock: number;
   minStock: number;
   status: ItemStatus;
+  condition: ItemCondition;
   categoryId: string;
   locationId: string;
   createdAt: Date;
@@ -95,6 +118,42 @@ export interface BorrowingItem {
   createdAt: Date;
   updatedAt: Date;
   borrowing?: Borrowing;
+  item?: Item;
+}
+
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  requesterName: string;
+  purpose: string;
+  transactionDate: Date;
+  returnDate?: Date;
+  expectedReturnDate?: Date;
+  consumedDate?: Date;
+  status: TransactionStatus;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: TransactionItem[];
+  activities?: Activity[];
+}
+
+export interface TransactionItem {
+  id: string;
+  transactionId: string;
+  itemId: string;
+  quantity: number;
+  returnedQuantity: number;
+  consumedQuantity: number;
+  damagedQuantity: number;
+  lostQuantity: number;
+  status: TransactionStatus;
+  condition?: ItemCondition;
+  returnNotes?: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  transaction?: Transaction;
   item?: Item;
 }
 
@@ -307,11 +366,21 @@ export interface DashboardData {
 export interface AnalyticsResponse {
   categoryDistribution: CategoryDistribution[];
   mostBorrowedItems: MostBorrowedItem[];
-  monthlyTrend: {
+  monthlyBorrowingTrend: {
     month: string;
     borrowCount: number;
     returnCount: number;
   }[];
+  summary: {
+    totalItems: number;
+    totalBorrowings: number;
+    activeBorrowings: number;
+    overdueBorrowings: number;
+    damagedItems: number;
+    damagedReturns: number;
+    avgBorrowingDuration: number;
+    returnRate: number;
+  };
   insights?: {
     title: string;
     description: string;
@@ -331,11 +400,49 @@ export interface BorrowingFormData {
   }>;
 }
 
+export interface TransactionFormData {
+  requesterName: string;
+  purpose: string;
+  type: TransactionType;
+  expectedReturnDate?: string; // For tools only
+  notes?: string;
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    notes?: string;
+  }>;
+}
+
+export interface MaterialRequestFormData {
+  requesterName: string;
+  purpose: string;
+  notes?: string;
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    notes?: string;
+  }>;
+}
+
+export interface ToolBorrowingFormData {
+  borrowerName: string;
+  purpose: string;
+  expectedReturnDate: string;
+  notes?: string;
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    notes?: string;
+  }>;
+}
+
 export interface ItemFormData {
   name: string;
   description: string;
+  imageUrl?: string;
   stock: number;
   minStock: number;
+  condition: ItemCondition;
   categoryId: string;
   locationId: string;
 }

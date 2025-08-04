@@ -14,7 +14,9 @@ import {
   prepareBorrowingDataForExport,
   exportActivitiesToPDF,
   exportActivitiesToExcel,
-  prepareActivityDataForExport
+  prepareActivityDataForExport,
+  exportEnhancedReportToPDF,
+  exportEnhancedReportToExcel
 } from '@/lib/exportUtils'
 
 // Enhanced types for report data
@@ -74,20 +76,14 @@ interface ReportData {
   status: string
 }
 
-type ReportType = 'borrowings' | 'activities' | 'conditions' | 'damages' | 'utilization'
+type ReportType = 'all-activities' | 'tools' | 'materials' | 'conditions-damage-utilization'
 
 const ReportsContent: React.FC = () => {
   const searchParams = useSearchParams()
-  const [reportType, setReportType] = useState<ReportType>('borrowings')
+  const [reportType, setReportType] = useState<ReportType>('all-activities')
   const [filters, setFilters] = useState({
     dateFrom: '',
-    dateTo: '',
-    category: '',
-    status: '',
-    activityType: '',
-    condition: '',
-    damageLevel: '',
-    utilizationLevel: ''
+    dateTo: ''
   })
 
   const [isGenerating, setIsGenerating] = useState(false)
@@ -95,22 +91,41 @@ const ReportsContent: React.FC = () => {
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   // Data states
-  const [reportData, setReportData] = useState<ReportData[]>([])
-  const [activitiesData, setActivitiesData] = useState<Activity[]>([])
-  const [conditionData, setConditionData] = useState<ConditionReportData[]>([])
-  const [damageData, setDamageData] = useState<DamageReportData[]>([])
-  const [utilizationData, setUtilizationData] = useState<UtilizationReportData[]>([])
+  const [allActivitiesData, setAllActivitiesData] = useState<any[]>([])
+  const [toolsData, setToolsData] = useState<any[]>([])
+  const [materialsData, setMaterialsData] = useState<any[]>([])
+  const [conditionsData, setConditionsData] = useState<any[]>([])
+  const [previewData, setPreviewData] = useState<any[]>([])
 
   // Pre-fill filters from URL params (from Calendar integration)
   useEffect(() => {
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
+    const reportTypeParam = searchParams.get('reportType')
+
     if (dateFrom || dateTo) {
       setFilters(prev => ({
         ...prev,
         dateFrom: dateFrom || '',
         dateTo: dateTo || ''
       }))
+    }
+
+    // Set report type based on calendar selection
+    if (reportTypeParam) {
+      switch (reportTypeParam) {
+        case 'tools':
+          setReportType('tools')
+          break
+        case 'materials':
+          setReportType('materials')
+          break
+        case 'conditions':
+          setReportType('conditions-damage-utilization')
+          break
+        default:
+          setReportType('all-activities')
+      }
     }
   }, [searchParams])
 
@@ -126,20 +141,17 @@ const ReportsContent: React.FC = () => {
 
       let endpoint = ''
       switch (reportType) {
-        case 'borrowings':
-          endpoint = `/api/borrowings?${queryParams}`
+        case 'all-activities':
+          endpoint = `/api/transactions?${queryParams}`
           break
-        case 'activities':
-          endpoint = `/api/activities?${queryParams}`
+        case 'tools':
+          endpoint = `/api/transactions?type=BORROWING&${queryParams}`
           break
-        case 'conditions':
-          endpoint = `/api/reports/conditions?${queryParams}`
+        case 'materials':
+          endpoint = `/api/transactions?type=REQUEST&${queryParams}`
           break
-        case 'damages':
-          endpoint = `/api/reports/damages?${queryParams}`
-          break
-        case 'utilization':
-          endpoint = `/api/reports/utilization?${queryParams}`
+        case 'conditions-damage-utilization':
+          endpoint = `/api/reports/comprehensive?${queryParams}`
           break
         default:
           return
@@ -147,22 +159,25 @@ const ReportsContent: React.FC = () => {
 
       const response = await fetch(endpoint)
       if (response.ok) {
-        const data = await response.json()
+        const result = await response.json()
+        const data = result.data || result
+
         switch (reportType) {
-          case 'borrowings':
-            setReportData(data)
+          case 'all-activities':
+            setAllActivitiesData(data)
+            setPreviewData(data.slice(0, 10)) // Show first 10 for preview
             break
-          case 'activities':
-            setActivitiesData(data)
+          case 'tools':
+            setToolsData(data)
+            setPreviewData(data.slice(0, 10))
             break
-          case 'conditions':
-            setConditionData(data)
+          case 'materials':
+            setMaterialsData(data)
+            setPreviewData(data.slice(0, 10))
             break
-          case 'damages':
-            setDamageData(data)
-            break
-          case 'utilization':
-            setUtilizationData(data)
+          case 'conditions-damage-utilization':
+            setConditionsData(data)
+            setPreviewData(data.slice(0, 10))
             break
         }
       }
@@ -226,37 +241,27 @@ const ReportsContent: React.FC = () => {
           result = await exportActivitiesToExcel(exportData, filters)
         }
       } else {
-        // For enhanced reports, create simple export
-        const timestamp = new Date().toISOString().split('T')[0]
-        const filename = `${reportType}-report-${timestamp}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-
-        // Simple implementation - in production, you'd want proper PDF/Excel generation
-        let dataToExport: Record<string, unknown>[] = []
+        // For enhanced reports, use proper export functions
+        let dataToExport: any[] = []
         switch (reportType) {
-          case 'conditions':
-            dataToExport = conditionData.map(item => ({ ...item } as Record<string, unknown>))
+          case 'tools':
+            dataToExport = toolsData
             break
-          case 'damages':
-            dataToExport = damageData.map(item => ({ ...item } as Record<string, unknown>))
+          case 'materials':
+            dataToExport = materialsData
             break
-          case 'utilization':
-            dataToExport = utilizationData.map(item => ({ ...item } as Record<string, unknown>))
+          case 'conditions-damage-utilization':
+            dataToExport = conditionsData
             break
+          default:
+            dataToExport = []
         }
 
-        // Create and download JSON for now (in production, implement proper PDF/Excel)
-        const jsonData = JSON.stringify(dataToExport, null, 2)
-        const blob = new Blob([jsonData], { type: 'application/json' })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename.replace('.pdf', '.json').replace('.xlsx', '.json')
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-
-        result = { success: true, filename: a.download }
+        if (format === 'pdf') {
+          result = await exportEnhancedReportToPDF(dataToExport, reportType, filters)
+        } else {
+          result = await exportEnhancedReportToExcel(dataToExport, reportType, filters)
+        }
       }
 
       if (result && result.success) {
@@ -282,9 +287,9 @@ const ReportsContent: React.FC = () => {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reporting & Export</h1>
-          <p className="text-gray-600 mt-1">
+        <div className="px-6 py-4">
+          <h1 className="text-2xl font-bold text-gray-900">Reporting & Export</h1>
+          <p className="text-gray-600 text-sm">
             Generate dan export laporan inventaris dalam berbagai format
           </p>
 
@@ -311,226 +316,79 @@ const ReportsContent: React.FC = () => {
             <p className="text-sm text-gray-600">Pilih jenis laporan yang ingin dibuat dan diexport</p>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Basic Reports */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* New Report Types */}
               <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'borrowings'
+                reportType === 'all-activities'
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:bg-gray-50'
               }`}>
                 <input
                   type="radio"
                   name="reportType"
-                  value="borrowings"
-                  checked={reportType === 'borrowings'}
+                  value="all-activities"
+                  checked={reportType === 'all-activities'}
                   onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
                   className="sr-only"
                 />
-                <FileText className="h-8 w-8 text-blue-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Peminjaman</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Data peminjaman & pengembalian</p>
+                <ActivityIcon className="h-8 w-8 text-blue-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Semua Aktivitas</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Semua transaksi tools & materials</p>
               </label>
 
               <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'activities'
+                reportType === 'tools'
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:bg-gray-50'
               }`}>
                 <input
                   type="radio"
                   name="reportType"
-                  value="activities"
-                  checked={reportType === 'activities'}
+                  value="tools"
+                  checked={reportType === 'tools'}
                   onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
                   className="sr-only"
                 />
-                <ActivityIcon className="h-8 w-8 text-green-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Aktivitas</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Log semua aktivitas sistem</p>
+                <Package className="h-8 w-8 text-green-600 mb-2" />
+                <span className="font-medium text-gray-900 text-center">Tools</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Peminjaman & pengembalian tools</p>
               </label>
 
               <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'conditions'
+                reportType === 'materials'
                   ? 'border-purple-500 bg-purple-50'
                   : 'border-gray-200 hover:bg-gray-50'
               }`}>
                 <input
                   type="radio"
                   name="reportType"
-                  value="conditions"
-                  checked={reportType === 'conditions'}
+                  value="materials"
+                  checked={reportType === 'materials'}
                   onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
                   className="sr-only"
                 />
                 <Package className="h-8 w-8 text-purple-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Kondisi Barang</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Analisis kondisi & maintenance</p>
+                <span className="font-medium text-gray-900 text-center">Materials</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Permintaan & konsumsi materials</p>
               </label>
 
               <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'damages'
-                  ? 'border-red-500 bg-red-50'
-                  : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="damages"
-                  checked={reportType === 'damages'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
-                  className="sr-only"
-                />
-                <AlertTriangle className="h-8 w-8 text-red-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Kerusakan</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Laporan kerusakan & biaya</p>
-              </label>
-
-              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'utilization'
+                reportType === 'conditions-damage-utilization'
                   ? 'border-orange-500 bg-orange-50'
                   : 'border-gray-200 hover:bg-gray-50'
               }`}>
                 <input
                   type="radio"
                   name="reportType"
-                  value="utilization"
-                  checked={reportType === 'utilization'}
+                  value="conditions-damage-utilization"
+                  checked={reportType === 'conditions-damage-utilization'}
                   onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
                   className="sr-only"
                 />
                 <BarChart3 className="h-8 w-8 text-orange-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Utilisasi</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Tingkat penggunaan barang</p>
+                <span className="font-medium text-gray-900 text-center">Kondisi & Utilisasi</span>
+                <p className="text-xs text-gray-600 text-center mt-1">Gabungan kondisi, kerusakan & utilisasi</p>
               </label>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Filters */}
-        <Card className="glass">
-          <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
-              <Filter className="h-5 w-5" />
-              <span>Filter Laporan</span>
-            </h3>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Input
-                label="Tanggal Mulai"
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-              />
-              <Input
-                label="Tanggal Akhir"
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-              />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                <select
-                  value={filters.category}
-                  onChange={(e) => handleFilterChange('category', e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">Semua Kategori</option>
-                  <option value="Elektronik">Elektronik</option>
-                  <option value="Furniture">Furniture</option>
-                  <option value="Kendaraan">Kendaraan</option>
-                  <option value="Alat Tulis">Alat Tulis</option>
-                  <option value="Peralatan">Peralatan</option>
-                </select>
-              </div>
-
-              {/* Report-specific filters */}
-              {reportType === 'borrowings' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Semua Status</option>
-                    <option value="ACTIVE">Sedang Dipinjam</option>
-                    <option value="RETURNED">Dikembalikan</option>
-                    <option value="OVERDUE">Terlambat</option>
-                  </select>
-                </div>
-              )}
-
-              {reportType === 'activities' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Jenis Aktivitas</label>
-                  <select
-                    value={filters.activityType}
-                    onChange={(e) => handleFilterChange('activityType', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Semua Aktivitas</option>
-                    <option value="ITEM_ADDED">Barang Ditambah</option>
-                    <option value="ITEM_UPDATED">Barang Diupdate</option>
-                    <option value="ITEM_BORROWED">Barang Dipinjam</option>
-                    <option value="ITEM_RETURNED">Barang Dikembalikan</option>
-                    <option value="ITEM_DAMAGED">Barang Rusak</option>
-                    <option value="ITEM_LOST">Barang Hilang</option>
-                    <option value="STOCK_UPDATED">Stok Diupdate</option>
-                  </select>
-                </div>
-              )}
-
-              {reportType === 'conditions' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kondisi</label>
-                  <select
-                    value={filters.condition}
-                    onChange={(e) => handleFilterChange('condition', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Semua Kondisi</option>
-                    <option value="GOOD">Baik</option>
-                    <option value="DAMAGED">Rusak</option>
-                    <option value="LOST">Hilang</option>
-                    <option value="INCOMPLETE">Tidak Lengkap</option>
-                  </select>
-                </div>
-              )}
-
-              {reportType === 'damages' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Kerusakan</label>
-                  <select
-                    value={filters.damageLevel}
-                    onChange={(e) => handleFilterChange('damageLevel', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Semua Tingkat</option>
-                    <option value="minor">Kerusakan Ringan</option>
-                    <option value="major">Kerusakan Berat</option>
-                    <option value="total">Rusak Total</option>
-                    <option value="lost">Hilang</option>
-                  </select>
-                </div>
-              )}
-
-              {reportType === 'utilization' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Utilisasi</label>
-                  <select
-                    value={filters.utilizationLevel}
-                    onChange={(e) => handleFilterChange('utilizationLevel', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Semua Tingkat</option>
-                    <option value="high">Tinggi (&gt;80%)</option>
-                    <option value="medium">Sedang (40-80%)</option>
-                    <option value="low">Rendah (&lt;40%)</option>
-                    <option value="unused">Tidak Pernah Dipinjam</option>
-                  </select>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -538,11 +396,37 @@ const ReportsContent: React.FC = () => {
         {/* Generate Reports */}
         <Card className="glass">
           <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Download className="h-5 w-5 mr-2" />
-              Generate & Export Laporan
-            </h3>
-            <p className="text-sm text-gray-600">Export laporan dalam format PDF atau Excel</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Download className="h-5 w-5 mr-2" />
+                  Generate & Export Laporan
+                </h3>
+                <p className="text-sm text-gray-600">Export laporan dalam format PDF atau Excel</p>
+              </div>
+
+              {/* Integrated Date Filters */}
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Tanggal Mulai:</label>
+                  <Input
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Tanggal Akhir:</label>
+                  <Input
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -586,23 +470,24 @@ const ReportsContent: React.FC = () => {
             )}
 
             {/* Data Preview */}
-            {!isLoading && (
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Preview Data</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            {!isLoading && previewData.length > 0 && (
+              <div className="mt-6">
+                <h4 className="font-medium text-gray-900 mb-4">Preview Data</h4>
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4 p-4 bg-gray-50 rounded-lg">
                   <div>
                     <span className="text-gray-600">Total Records:</span>
                     <span className="ml-2 font-medium">
-                      {reportType === 'borrowings' ? reportData.length :
-                       reportType === 'activities' ? activitiesData.length :
-                       reportType === 'conditions' ? conditionData.length :
-                       reportType === 'damages' ? damageData.length :
-                       reportType === 'utilization' ? utilizationData.length : 0}
+                      {reportType === 'all-activities' ? allActivitiesData.length :
+                       reportType === 'tools' ? toolsData.length :
+                       reportType === 'materials' ? materialsData.length :
+                       reportType === 'conditions-damage-utilization' ? conditionsData.length : 0}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-600">Report Type:</span>
-                    <span className="ml-2 font-medium capitalize">{reportType}</span>
+                    <span className="ml-2 font-medium capitalize">{reportType.replace('-', ' ')}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Date Range:</span>
@@ -611,8 +496,71 @@ const ReportsContent: React.FC = () => {
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Category:</span>
-                    <span className="ml-2 font-medium">{filters.category || 'All'}</span>
+                    <span className="text-gray-600">Preview:</span>
+                    <span className="ml-2 font-medium">First {previewData.length} records</span>
+                  </div>
+                </div>
+
+                {/* Preview Table */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto max-h-96">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {reportType === 'all-activities' || reportType === 'tools' || reportType === 'materials' ? (
+                            <>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tujuan</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kondisi</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilisasi</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kerusakan</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {previewData.map((item, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            {reportType === 'all-activities' || reportType === 'tools' || reportType === 'materials' ? (
+                              <>
+                                <td className="px-4 py-3 text-sm text-gray-900">{item.requesterName || 'N/A'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-500">{item.purpose || 'N/A'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {item.transactionDate ? new Date(item.transactionDate).toLocaleDateString('id-ID') : 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    item.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' :
+                                    item.status === 'RETURNED' ? 'bg-green-100 text-green-800' :
+                                    item.status === 'CONSUMED' ? 'bg-purple-100 text-purple-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {item.status || 'N/A'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {item.items ? `${item.items.length} items` : 'N/A'}
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-4 py-3 text-sm text-gray-900">{item.itemName || item.name || 'N/A'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-500">{item.condition || 'N/A'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-500">{item.utilizationRate || 'N/A'}%</td>
+                                <td className="px-4 py-3 text-sm text-gray-500">{item.damageRate || 'N/A'}%</td>
+                              </>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -630,7 +578,7 @@ const ReportsLoading: React.FC = () => {
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reporting & Export</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Reporting & Export</h1>
           <p className="text-gray-600 mt-1">Loading...</p>
         </div>
         <div className="flex items-center justify-center py-12">
