@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
-import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Card, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { 
@@ -16,7 +16,7 @@ import {
   X, 
   Download, 
   Trash2, 
-  Filter,
+
   Clock,
   CheckCircle,
   Search
@@ -25,7 +25,7 @@ import {
   TransactionStatus, 
   Transaction, 
   TransactionType, 
-  CategoryType,
+
   ItemCondition 
 } from '@/types'
 
@@ -97,7 +97,7 @@ type SidebarPanel = 'none' | 'transaction-detail' | 'return-form'
 interface SidebarState {
   isOpen: boolean
   panel: SidebarPanel
-  data?: any
+  data?: Transaction
 }
 
 const formatDate = (date: Date | string) => {
@@ -231,12 +231,12 @@ const ActivitiesPage: React.FC = () => {
   }
 
   // Sidebar handlers
-  const openSidebar = (panel: SidebarPanel, data?: any) => {
+  const openSidebar = (panel: SidebarPanel, data?: Transaction) => {
     setSidebar({ isOpen: true, panel, data })
   }
 
   const closeSidebar = () => {
-    setSidebar({ isOpen: false, panel: 'none', data: null })
+    setSidebar({ isOpen: false, panel: 'none', data: undefined })
   }
 
   // Action handlers
@@ -509,7 +509,7 @@ const ActivitiesPage: React.FC = () => {
 
               {sidebar.panel === 'return-form' && (
                 <ReturnForm
-                  transaction={sidebar.data}
+                  transaction={sidebar.data!}
                   onClose={closeSidebar}
                   onSuccess={() => {
                     fetchTransactions()
@@ -520,7 +520,7 @@ const ActivitiesPage: React.FC = () => {
 
               {sidebar.panel === 'transaction-detail' && (
                 <TransactionDetail
-                  transaction={sidebar.data}
+                  transaction={sidebar.data!}
                   onClose={closeSidebar}
                 />
               )}
@@ -834,10 +834,10 @@ const TransactionDetail = ({ transaction, onClose }: {
               <span>{formatDate(transaction.expectedReturnDate)}</span>
             </div>
           )}
-          {transaction.returnedAt && (
+          {transaction.returnDate && (
             <div className="flex justify-between">
               <span className="text-gray-600">Dikembalikan:</span>
-              <span>{formatDate(transaction.returnedAt)}</span>
+              <span>{formatDate(transaction.returnDate)}</span>
             </div>
           )}
           <div className="flex justify-between">

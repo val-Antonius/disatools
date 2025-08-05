@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
-import { Upload, X, Image as ImageIcon } from 'lucide-react'
+import Image from 'next/image'
+import { X, Image as ImageIcon } from 'lucide-react'
 import Button from './Button'
 
 interface ImageUploadProps {
@@ -96,9 +97,11 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       
       {value ? (
         <div className="relative">
-          <img
+          <Image
             src={value}
             alt="Item preview"
+            width={400}
+            height={192}
             className="w-full h-48 object-cover rounded-lg border border-gray-300"
           />
           <Button

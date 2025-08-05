@@ -8,7 +8,7 @@ import {
   LayoutDashboard,
   Package,
   ArrowRightLeft,
-  BarChart3,
+
   FileText,
   Calendar,
   Settings

@@ -12,7 +12,15 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo')
     const search = searchParams.get('search')
 
-    const where: any = {}
+    const where: {
+      type?: TransactionType;
+      status?: TransactionStatus;
+      transactionDate?: { gte?: Date; lte?: Date };
+      OR?: Array<{
+        requesterName?: { contains: string; mode: 'insensitive' };
+        purpose?: { contains: string; mode: 'insensitive' };
+      }>;
+    } = {}
 
     if (type) {
       where.type = type
@@ -35,16 +43,7 @@ export async function GET(request: NextRequest) {
     if (search) {
       where.OR = [
         { requesterName: { contains: search, mode: 'insensitive' } },
-        { purpose: { contains: search, mode: 'insensitive' } },
-        {
-          items: {
-            some: {
-              item: {
-                name: { contains: search, mode: 'insensitive' }
-              }
-            }
-          }
-        }
+        { purpose: { contains: search, mode: 'insensitive' } }
       ]
     }
 
@@ -99,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate items and check stock
-    const itemIds = items.map((item: any) => item.itemId)
+    const itemIds = items.map((item: { itemId: string; quantity: number; notes?: string }) => item.itemId)
     const dbItems = await prisma.item.findMany({
       where: { id: { in: itemIds } },
       include: { category: true }
@@ -117,7 +116,7 @@ export async function POST(request: NextRequest) {
     const isToolBorrowing = type === TransactionType.BORROWING
 
     for (const dbItem of dbItems) {
-      const requestedItem = items.find((item: any) => item.itemId === dbItem.id)
+      const requestedItem = items.find((item: { itemId: string; quantity: number; notes?: string }) => item.itemId === dbItem.id)
       
       if (isMaterialRequest && dbItem.category.type !== CategoryType.MATERIAL) {
         return NextResponse.json(
@@ -160,7 +159,7 @@ export async function POST(request: NextRequest) {
         status: isMaterialRequest ? TransactionStatus.CONSUMED : TransactionStatus.ACTIVE,
         notes,
         items: {
-          create: items.map((item: any) => ({
+          create: items.map((item: { itemId: string; quantity: number; notes?: string }) => ({
             itemId: item.itemId,
             quantity: item.quantity,
             consumedQuantity: isMaterialRequest ? item.quantity : 0,
@@ -200,14 +199,14 @@ export async function POST(request: NextRequest) {
       data: {
         type: isMaterialRequest ? ActivityType.MATERIAL_REQUESTED : ActivityType.ITEM_BORROWED,
         description: isMaterialRequest 
-          ? `Material requested by ${requesterName}: ${items.map((i: any) => dbItems.find(di => di.id === i.itemId)?.name).join(', ')}`
-          : `Tools borrowed by ${requesterName}: ${items.map((i: any) => dbItems.find(di => di.id === i.itemId)?.name).join(', ')}`,
+          ? `Material requested by ${requesterName}: ${items.map((i: { itemId: string; quantity: number; notes?: string }) => dbItems.find(di => di.id === i.itemId)?.name).join(', ')}`
+          : `Tools borrowed by ${requesterName}: ${items.map((i: { itemId: string; quantity: number; notes?: string }) => dbItems.find(di => di.id === i.itemId)?.name).join(', ')}`,
         transactionId: transaction.id,
         metadata: {
           requesterName,
           purpose,
           itemCount: items.length,
-          totalQuantity: items.reduce((sum: number, item: any) => sum + item.quantity, 0)
+          totalQuantity: items.reduce((sum: number, item: { itemId: string; quantity: number; notes?: string }) => sum + item.quantity, 0)
         }
       }
     })

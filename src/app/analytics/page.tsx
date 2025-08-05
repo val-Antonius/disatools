@@ -9,12 +9,10 @@ import { AnalyticsResponse, CategoryDistribution, MostBorrowedItem } from '@/typ
 // KPI Slider Component
 const KPISlider: React.FC<{
   totalItems: number;
-  totalBorrowings: number;
   activeBorrowings: number;
   damagedItems: number;
   damagedReturns: number;
-  categoryCount: number;
-}> = ({ totalItems, totalBorrowings, activeBorrowings, damagedItems, damagedReturns, categoryCount }) => {
+}> = ({ totalItems, activeBorrowings, damagedItems, damagedReturns }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   // Calculate derived KPIs
@@ -330,11 +328,9 @@ const AnalyticsPage: React.FC = () => {
         {/* KPI Cards Slider */}
         <KPISlider
           totalItems={summary.totalItems}
-          totalBorrowings={summary.totalBorrowings}
           activeBorrowings={summary.activeBorrowings}
           damagedItems={summary.damagedItems}
           damagedReturns={summary.damagedReturns}
-          categoryCount={categoryDistribution.length}
         />
 
         {/* Charts */}

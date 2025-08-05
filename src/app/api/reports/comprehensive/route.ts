@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo')
 
     // Build date filter
-    const dateFilter: any = {}
+    const dateFilter: { createdAt?: { gte?: Date; lte?: Date } } = {}
     if (dateFrom || dateTo) {
       dateFilter.createdAt = {}
       if (dateFrom) {

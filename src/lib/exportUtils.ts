@@ -32,6 +32,24 @@ interface ActivityForExport {
   createdAt: string
   metadata?: Record<string, unknown>
 }
+
+// Generic export data interface
+interface ExportDataItem {
+  requesterName?: string
+  borrowerName?: string
+  itemName?: string
+  name?: string
+  category?: string
+  transactionDate?: string
+  returnDate?: string | null
+  purpose?: string
+  status?: string
+  quantity?: number
+  stock?: number
+  condition?: string
+  location?: string
+  [key: string]: any
+}
 interface ExportBorrowingData {
   id: string
   borrowerName: string
@@ -527,7 +545,7 @@ const getStatusText = (status: string): string => {
 
 // Export Enhanced Reports to PDF
 export const exportEnhancedReportToPDF = async (
-  data: any[],
+  data: Array<Record<string, unknown>>,
   reportType: string,
   filters: ExportFilters
 ) => {
@@ -554,13 +572,13 @@ export const exportEnhancedReportToPDF = async (
     doc.text(`Generated: ${formatDateTime(new Date())}`, 20, doc.internal.pageSize.height - 10)
 
     let columns: string[] = []
-    let rows: any[][] = []
+    let rows: Array<Array<string | number | Date>> = []
 
     // Configure columns and rows based on report type
     switch (reportType) {
       case 'tools':
         columns = ['Peminjam', 'Tool', 'Kategori', 'Tanggal Pinjam', 'Tanggal Kembali', 'Tujuan', 'Status']
-        rows = data.map(item => [
+        rows = data.map((item: ExportDataItem) => [
           item.requesterName || item.borrowerName || '',
           item.itemName || item.name || '',
           item.category || '',
@@ -572,7 +590,7 @@ export const exportEnhancedReportToPDF = async (
         break
       case 'materials':
         columns = ['Peminta', 'Material', 'Kategori', 'Tanggal', 'Quantity', 'Tujuan', 'Status']
-        rows = data.map(item => [
+        rows = data.map((item: ExportDataItem) => [
           item.requesterName || '',
           item.itemName || item.name || '',
           item.category || '',
@@ -584,7 +602,7 @@ export const exportEnhancedReportToPDF = async (
         break
       case 'conditions-damage-utilization':
         columns = ['Item', 'Kategori', 'Kondisi', 'Stok', 'Lokasi', 'Status']
-        rows = data.map(item => [
+        rows = data.map((item: any) => [
           item.itemName || item.name || '',
           item.category || '',
           item.condition || '',
@@ -595,7 +613,7 @@ export const exportEnhancedReportToPDF = async (
         break
       default:
         columns = ['Data']
-        rows = data.map(item => [JSON.stringify(item)])
+        rows = data.map((item: any) => [JSON.stringify(item)])
     }
 
     // Add table
@@ -622,19 +640,19 @@ export const exportEnhancedReportToPDF = async (
 
 // Export Enhanced Reports to Excel
 export const exportEnhancedReportToExcel = async (
-  data: any[],
+  data: Array<Record<string, unknown>>,
   reportType: string,
-  filters: ExportFilters
+  _filters: ExportFilters
 ) => {
   try {
     const XLSX = await import('xlsx')
 
-    let excelData: any[] = []
+    let excelData: Array<Record<string, unknown>> = []
 
     // Configure data based on report type
     switch (reportType) {
       case 'tools':
-        excelData = data.map((item, index) => ({
+        excelData = data.map((item: any, index: number) => ({
           'No': index + 1,
           'Peminjam': item.requesterName || item.borrowerName || '',
           'Tool': item.itemName || item.name || '',
@@ -646,7 +664,7 @@ export const exportEnhancedReportToExcel = async (
         }))
         break
       case 'materials':
-        excelData = data.map((item, index) => ({
+        excelData = data.map((item: any, index: number) => ({
           'No': index + 1,
           'Peminta': item.requesterName || '',
           'Material': item.itemName || item.name || '',
@@ -658,7 +676,7 @@ export const exportEnhancedReportToExcel = async (
         }))
         break
       case 'conditions-damage-utilization':
-        excelData = data.map((item, index) => ({
+        excelData = data.map((item: any, index: number) => ({
           'No': index + 1,
           'Item': item.itemName || item.name || '',
           'Kategori': item.category || '',
@@ -669,7 +687,7 @@ export const exportEnhancedReportToExcel = async (
         }))
         break
       default:
-        excelData = data.map((item, index) => ({
+        excelData = data.map((item: any, index: number) => ({
           'No': index + 1,
           'Data': JSON.stringify(item)
         }))

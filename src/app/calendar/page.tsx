@@ -125,7 +125,14 @@ const CalendarPage: React.FC = () => {
         const transactions = transactionsData.data || []
 
         // Convert transactions to activity-like events for calendar display
-        const transactionEvents = transactions.map((transaction: any) => ({
+        const transactionEvents = transactions.map((transaction: {
+          id: string;
+          type: string;
+          requesterName: string;
+          purpose: string;
+          transactionDate: string;
+          items?: Array<{ item: { name: string } }>;
+        }) => ({
           id: `transaction-${transaction.id}`,
           type: transaction.type === 'REQUEST' ? ActivityType.MATERIAL_REQUESTED : ActivityType.ITEM_BORROWED,
           description: `${transaction.type === 'REQUEST' ? 'Material diminta' : 'Tool dipinjam'} oleh ${transaction.requesterName}: ${transaction.purpose}`,

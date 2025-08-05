@@ -12,7 +12,10 @@ async function ensureDefaultCategories() {
     await prisma.category.upsert({
       where: { name: category.name },
       update: {},
-      create: category
+      create: {
+        ...category,
+        type: category.type as CategoryType
+      }
     })
   }
 }

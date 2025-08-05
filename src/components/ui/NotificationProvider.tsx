@@ -83,14 +83,14 @@ const NotificationItem: React.FC<{
       }, notification.duration)
       return () => clearTimeout(timer)
     }
-  }, [notification.duration])
+  }, [notification.duration, handleRemove])
 
-  const handleRemove = () => {
+  const handleRemove = React.useCallback(() => {
     setIsRemoving(true)
     setTimeout(() => {
       onRemove(notification.id)
     }, 300) // Match animation duration
-  }
+  }, [onRemove, notification.id])
 
   return (
     <div
@@ -148,7 +148,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9)
+    const id = Math.random().toString(36).substring(2, 11)
     const newNotification: Notification = {
       ...notification,
       id,

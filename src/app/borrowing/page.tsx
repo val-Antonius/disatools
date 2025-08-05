@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
-import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Card, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
-import { Plus, Search, ArrowLeft, Clock, CheckCircle, Package, Calendar, User, FileText, AlertTriangle, Eye, RotateCcw, X, Download, Trash2, Filter, List, Grid3X3 } from 'lucide-react'
-import { BorrowingStatus, Borrowing, Item, BorrowingFormData, ReturnData, ItemCondition } from '@/types'
+import { Search, Clock, CheckCircle, Package, Calendar, User, FileText, AlertTriangle, Eye, RotateCcw, X, Download, Trash2 } from 'lucide-react'
+import { BorrowingStatus, Borrowing, ItemCondition, BorrowingItem } from '@/types'
 import { useNotifications } from '@/components/ui/NotificationProvider'
 
 // Enhanced status system with visual indicators
@@ -54,7 +54,7 @@ type SidebarPanel = 'none' | 'borrowing-detail' | 'return-form' | 'report-genera
 interface SidebarState {
   isOpen: boolean
   panel: SidebarPanel
-  data?: any
+  data?: Borrowing | { selectedIds: string[] }
 }
 
 const formatDate = (date: Date | string) => {
@@ -167,12 +167,12 @@ const BorrowingPage: React.FC = () => {
   }
 
   // Sidebar handlers
-  const openSidebar = (panel: SidebarPanel, data?: any) => {
+  const openSidebar = (panel: SidebarPanel, data?: Borrowing | { selectedIds: string[] }) => {
     setSidebar({ isOpen: true, panel, data })
   }
 
   const closeSidebar = () => {
-    setSidebar({ isOpen: false, panel: 'none', data: null })
+    setSidebar({ isOpen: false, panel: 'none', data: undefined })
   }
 
   // Action handlers
@@ -703,11 +703,11 @@ const BorrowingPage: React.FC = () => {
 
     const handleSubmitReturn = async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!sidebar.data?.id) return
+      if (!sidebar.data || !('id' in sidebar.data)) return
 
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/borrowings/${sidebar.data.id}/return`, {
+        const response = await fetch(`/api/borrowings/${(sidebar.data as Borrowing).id}/return`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(returnData)
@@ -729,7 +729,7 @@ const BorrowingPage: React.FC = () => {
       }
     }
 
-    const updateReturnItem = (index: number, field: string, value: any) => {
+    const updateReturnItem = (index: number, field: string, value: string | number) => {
       setReturnData(prev => ({
         ...prev,
         items: prev.items.map((item, i) =>
@@ -798,7 +798,7 @@ const BorrowingPage: React.FC = () => {
 
         {/* Sidebar Content */}
         <div className="flex-1 overflow-y-auto h-full pb-20">
-          {sidebar.panel === 'return-form' && sidebar.data && (
+          {sidebar.panel === 'return-form' && sidebar.data && 'id' in sidebar.data && (
             <div className="p-6">
               <form onSubmit={handleSubmitReturn} className="space-y-6">
                 {/* Borrowing Info */}
@@ -807,11 +807,11 @@ const BorrowingPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="font-medium text-gray-700">Peminjam:</span>
-                      <span className="ml-2 text-gray-900">{sidebar.data.borrowerName}</span>
+                      <span className="ml-2 text-gray-900">{(sidebar.data as Borrowing).borrowerName}</span>
                     </div>
                     <div>
                       <span className="font-medium text-gray-700">Tujuan:</span>
-                      <span className="ml-2 text-gray-900">{sidebar.data.purpose}</span>
+                      <span className="ml-2 text-gray-900">{(sidebar.data as Borrowing).purpose}</span>
                     </div>
                   </div>
                 </div>
@@ -821,7 +821,7 @@ const BorrowingPage: React.FC = () => {
                   <h4 className="font-medium text-gray-900 mb-3">Barang yang Dikembalikan</h4>
                   <div className="space-y-4">
                     {returnData.items.map((returnItem, index) => {
-                      const borrowingItem = sidebar.data.items?.find((item: { id: string; quantity: number; returnedQuantity: number }) => item.id === returnItem.borrowingItemId)
+                      const borrowingItem = (sidebar.data as Borrowing)?.items?.find((item: { id: string; quantity: number; returnedQuantity: number }) => item.id === returnItem.borrowingItemId)
                       if (!borrowingItem) return null
 
                       const maxReturn = borrowingItem.quantity - borrowingItem.returnedQuantity
@@ -937,12 +937,12 @@ const BorrowingPage: React.FC = () => {
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-medium text-gray-900 mb-2">Detail Peminjaman</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Peminjam:</span> {sidebar.data.borrowerName}</div>
-                    <div><span className="font-medium">Tujuan:</span> {sidebar.data.purpose}</div>
-                    <div><span className="font-medium">Tanggal Pinjam:</span> {formatDate(sidebar.data.borrowDate)}</div>
-                    <div><span className="font-medium">Jatuh Tempo:</span> {formatDate(sidebar.data.expectedReturnDate)}</div>
-                    {sidebar.data.returnDate && (
-                      <div><span className="font-medium">Tanggal Kembali:</span> {formatDate(sidebar.data.returnDate)}</div>
+                    <div><span className="font-medium">Peminjam:</span> {(sidebar.data as Borrowing).borrowerName}</div>
+                    <div><span className="font-medium">Tujuan:</span> {(sidebar.data as Borrowing).purpose}</div>
+                    <div><span className="font-medium">Tanggal Pinjam:</span> {formatDate((sidebar.data as Borrowing).borrowDate)}</div>
+                    <div><span className="font-medium">Jatuh Tempo:</span> {formatDate((sidebar.data as Borrowing).expectedReturnDate)}</div>
+                    {(sidebar.data as Borrowing).returnDate && (
+                      <div><span className="font-medium">Tanggal Kembali:</span> {formatDate((sidebar.data as Borrowing).returnDate!)}</div>
                     )}
                   </div>
                 </div>
@@ -950,7 +950,7 @@ const BorrowingPage: React.FC = () => {
                 <div>
                   <h4 className="font-medium text-gray-900 mb-2">Daftar Barang</h4>
                   <div className="space-y-2">
-                    {sidebar.data.items?.map((item: any) => (
+                    {(sidebar.data as Borrowing).items?.map((item: BorrowingItem) => (
                       <div key={item.id} className="border border-gray-200 rounded p-3">
                         <div className="flex justify-between items-start">
                           <div>
@@ -966,7 +966,7 @@ const BorrowingPage: React.FC = () => {
                           </div>
                         </div>
                         {item.returnNotes && (
-                          <p className="text-sm text-gray-600 mt-2 italic">"{item.returnNotes}"</p>
+                          <p className="text-sm text-gray-600 mt-2 italic">&ldquo;{item.returnNotes}&rdquo;</p>
                         )}
                       </div>
                     ))}
@@ -981,7 +981,7 @@ const BorrowingPage: React.FC = () => {
               <div className="text-center py-12">
                 <Download className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Generate Report</h3>
-                <p className="text-gray-600 mb-4">Export {sidebar.data?.selectedIds?.length} riwayat terpilih</p>
+                <p className="text-gray-600 mb-4">Export riwayat terpilih</p>
                 <Button variant="primary" className="w-full">
                   <Download className="h-4 w-4 mr-2" />
                   Download Excel Report

@@ -101,7 +101,7 @@ export async function POST(
         // Update item stock and condition
         const goodItemsReturned = returnItem.returnQuantity || 0
         const damagedItemsReturned = returnItem.damagedQuantity || 0
-        const lostItemsReturned = returnItem.lostQuantity || 0
+        const _lostItemsReturned = returnItem.lostQuantity || 0
 
         // Update item stock (only good items go back to stock)
         if (goodItemsReturned > 0) {

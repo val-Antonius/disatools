@@ -6,7 +6,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
-import { FileText, Download, Calendar, Filter, AlertCircle, AlertTriangle, Package, BarChart3, Activity as ActivityIcon, CheckCircle } from 'lucide-react'
+import { FileText, Download, Calendar, AlertCircle, Package, BarChart3, CheckCircle, Activity as ActivityIcon } from 'lucide-react'
 import { Activity, ItemCondition } from '@/types'
 import {
   exportToPDF,
@@ -20,7 +20,7 @@ import {
 } from '@/lib/exportUtils'
 
 // Enhanced types for report data
-interface ConditionReportData {
+interface _ConditionReportData {
   itemId: string
   itemName: string
   category: string
@@ -36,7 +36,7 @@ interface ConditionReportData {
   totalLoss: number
 }
 
-interface DamageReportData {
+interface _DamageReportData {
   borrowingId: string
   borrowerName: string
   itemName: string
@@ -50,7 +50,7 @@ interface DamageReportData {
   severity: 'minor' | 'major' | 'total'
 }
 
-interface UtilizationReportData {
+interface _UtilizationReportData {
   itemId: string
   itemName: string
   category: string
@@ -66,17 +66,25 @@ interface UtilizationReportData {
 
 // Basic report data for borrowings and activities
 interface ReportData {
-  id: string
-  borrowerName: string
-  itemName: string
-  category: string
-  borrowDate: string
-  returnDate: string | null
-  purpose: string
-  status: string
+  id?: string
+  borrowerName?: string
+  requesterName?: string
+  itemName?: string
+  name?: string
+  category?: string
+  borrowDate?: string
+  returnDate?: string | null
+  purpose?: string
+  status?: string
+  transactionDate?: string
+  items?: any[]
+  condition?: string
+  utilizationRate?: number
+  damageRate?: number
+  [key: string]: any
 }
 
-type ReportType = 'all-activities' | 'tools' | 'materials' | 'conditions-damage-utilization'
+type ReportType = 'all-activities' | 'tools' | 'materials' | 'conditions-damage-utilization' | 'borrowings' | 'activities'
 
 const ReportsContent: React.FC = () => {
   const searchParams = useSearchParams()
@@ -91,11 +99,11 @@ const ReportsContent: React.FC = () => {
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   // Data states
-  const [allActivitiesData, setAllActivitiesData] = useState<any[]>([])
-  const [toolsData, setToolsData] = useState<any[]>([])
-  const [materialsData, setMaterialsData] = useState<any[]>([])
-  const [conditionsData, setConditionsData] = useState<any[]>([])
-  const [previewData, setPreviewData] = useState<any[]>([])
+  const [allActivitiesData, setAllActivitiesData] = useState<Activity[]>([])
+  const [toolsData, setToolsData] = useState<ReportData[]>([])
+  const [materialsData, setMaterialsData] = useState<ReportData[]>([])
+  const [conditionsData, setConditionsData] = useState<ReportData[]>([])
+  const [previewData, setPreviewData] = useState<ReportData[]>([])
 
   // Pre-fill filters from URL params (from Calendar integration)
   useEffect(() => {
@@ -207,7 +215,7 @@ const ReportsContent: React.FC = () => {
       let result
 
       if (reportType === 'borrowings') {
-        const exportData = prepareBorrowingDataForExport(reportData.map(item => ({
+        const exportData = prepareBorrowingDataForExport(previewData.map((item: any) => ({
           id: item.id,
           borrowerName: item.borrowerName,
           borrowDate: item.borrowDate,
@@ -230,7 +238,7 @@ const ReportsContent: React.FC = () => {
           result = await exportToExcel(exportData, filters)
         }
       } else if (reportType === 'activities') {
-        const exportData = prepareActivityDataForExport(activitiesData.map(activity => ({
+        const exportData = prepareActivityDataForExport(allActivitiesData.map((activity: any) => ({
           ...activity,
           createdAt: activity.createdAt.toString()
         })))
@@ -242,7 +250,7 @@ const ReportsContent: React.FC = () => {
         }
       } else {
         // For enhanced reports, use proper export functions
-        let dataToExport: any[] = []
+        let dataToExport: ReportData[] = []
         switch (reportType) {
           case 'tools':
             dataToExport = toolsData

@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
-import { Plus, Search, Grid3X3, List, Eye, Edit2, Trash2, Package, AlertTriangle, X, Check, Calendar, User, ChevronRight } from 'lucide-react'
+import { Plus, Search, Grid3X3, List, Eye, Edit2, Trash2, Package, AlertTriangle, X, Check, User } from 'lucide-react'
 import ImageUpload from '@/components/ui/ImageUpload'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
 import { ItemStatus, Item, Category, Location, ItemFormData, BorrowingFormData, CategoryType, TransactionFormData, MaterialRequestFormData, ToolBorrowingFormData, TransactionType, ItemCondition } from '@/types'
@@ -66,7 +67,7 @@ type SidebarPanel = 'none' | 'add-item' | 'item-detail' | 'material-request' | '
 interface SidebarState {
   isOpen: boolean;
   panel: SidebarPanel;
-  data?: any;
+  data?: Item | { items: Item[] };
 }
 
 // Combined and Enhanced Contextual Sidebar
@@ -99,7 +100,7 @@ const ContextualSidebar = ({
 }: {
   sidebar: SidebarState;
   onClose: () => void;
-  openSidebar: (panel: SidebarPanel, data?: any) => void;
+  openSidebar: (panel: SidebarPanel, data?: Item | { items: Item[] }) => void;
   formData: ItemFormData;
   setFormData: React.Dispatch<React.SetStateAction<ItemFormData>>;
   categories: Category[];
@@ -115,8 +116,8 @@ const ContextualSidebar = ({
   toolBorrowingData: ToolBorrowingFormData;
   setToolBorrowingData: React.Dispatch<React.SetStateAction<ToolBorrowingFormData>>;
   handleSubmitToolBorrowing: (e: React.FormEvent) => void;
-  unifiedTransactionData: any;
-  setUnifiedTransactionData: React.Dispatch<React.SetStateAction<any>>;
+  unifiedTransactionData: TransactionFormData;
+  setUnifiedTransactionData: React.Dispatch<React.SetStateAction<TransactionFormData>>;
   handleUnifiedTransactionSubmit: () => void;
   transactionTab: 'materials' | 'tools';
   setTransactionTab: React.Dispatch<React.SetStateAction<'materials' | 'tools'>>;
@@ -125,7 +126,7 @@ const ContextualSidebar = ({
 }) => {
   if (!sidebar.isOpen) return null;
 
-  const isEditMode = sidebar.panel === 'edit-item';
+  const _isEditMode = sidebar.panel === 'edit-item';
   const panelTitle = {
     'add-item': 'Tambah Item Baru',
     'edit-item': 'Edit Item',
@@ -310,9 +311,11 @@ const ContextualSidebar = ({
         return (
           <div>
             {item.imageUrl && (
-              <img
+              <Image
                 src={item.imageUrl}
                 alt={item.name}
+                width={400}
+                height={192}
                 className="w-full h-48 object-cover rounded-lg mb-4"
               />
             )}
@@ -330,7 +333,7 @@ const ContextualSidebar = ({
             </div>
           </div>
         );
-      case 'borrowing':
+      case 'transaction':
         return (
           <form onSubmit={handleSubmitBorrowing} className="space-y-4">
             <Input label="Nama Peminjam" value={borrowingData.borrowerName} onChange={(e) => setBorrowingData({ ...borrowingData, borrowerName: e.target.value })} required />
@@ -340,13 +343,13 @@ const ContextualSidebar = ({
           </form>
         );
       case 'material-request':
-        const materialItems = sidebar.data?.items || [];
+        const materialItems = (sidebar.data as { items: Item[] })?.items || [];
         return (
           <div className="space-y-4">
             <div className="bg-blue-50 p-3 rounded-lg">
               <h4 className="font-medium text-blue-900">Material yang Diminta</h4>
               <div className="mt-2 space-y-1">
-                {materialItems.map((item: any, index: number) => (
+                {materialItems.map((item: Item, index: number) => (
                   <div key={index} className="text-sm text-blue-700">
                     • {item.name} (Stok: {item.stock})
                   </div>
@@ -381,13 +384,13 @@ const ContextualSidebar = ({
           </div>
         );
       case 'tool-borrowing':
-        const toolItems = sidebar.data?.items || [];
+        const toolItems = (sidebar.data as { items: Item[] })?.items || [];
         return (
           <div className="space-y-4">
             <div className="bg-green-50 p-3 rounded-lg">
               <h4 className="font-medium text-green-900">Tool yang Dipinjam</h4>
               <div className="mt-2 space-y-1">
-                {toolItems.map((item: any, index: number) => (
+                {toolItems.map((item: Item, index: number) => (
                   <div key={index} className="text-sm text-green-700">
                     • {item.name} (Tersedia)
                   </div>
@@ -429,7 +432,7 @@ const ContextualSidebar = ({
           </div>
         );
       case 'transaction':
-        const transactionItems = sidebar.data?.items || [];
+        const transactionItems = (sidebar.data as { items: Item[] })?.items || [];
         const selectedMaterials = transactionItems.filter((item: Item) => item.category?.type === CategoryType.MATERIAL);
         const selectedTools = transactionItems.filter((item: Item) => item.category?.type === CategoryType.TOOL);
 
@@ -572,9 +575,9 @@ const ContextualSidebar = ({
 
 
 
-const InventoryPage: React.FC<{}> = () => {
+const InventoryPage: React.FC = () => {
   // Notification system
-  const { success, error, warning, info } = useNotifications()
+  const { success, error, warning } = useNotifications()
 
   // Existing states
   const [items, setItems] = useState<Item[]>([])
@@ -589,8 +592,8 @@ const InventoryPage: React.FC<{}> = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [sidebar, setSidebar] = useState<SidebarState>({ isOpen: false, panel: 'none' })
-  const [editingField, setEditingField] = useState<{ itemId: string, field: string } | null>(null)
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [_editingField, _setEditingField] = useState<{ itemId: string, field: string } | null>(null)
+  const [_hoveredItem, _setHoveredItem] = useState<string | null>(null)
 
 
 
@@ -631,12 +634,13 @@ const InventoryPage: React.FC<{}> = () => {
   })
 
   // Unified transaction form data
-  const [unifiedTransactionData, setUnifiedTransactionData] = useState({
+  const [unifiedTransactionData, setUnifiedTransactionData] = useState<TransactionFormData>({
     requesterName: '',
     purpose: '',
+    type: TransactionType.MATERIAL_REQUEST,
     expectedReturnDate: '',
     notes: '',
-    selectedItems: [] as Item[]
+    items: []
   })
 
   // Transaction form tab state
@@ -702,9 +706,9 @@ const InventoryPage: React.FC<{}> = () => {
       await fetchItems();
       closeSidebar();
       success('Item berhasil ditambahkan', `${formData.name} telah ditambahkan ke inventori`);
-    } catch (error) {
-      console.error('Error creating item:', error);
-      error('Gagal membuat item', error instanceof Error ? error.message : 'Terjadi kesalahan saat membuat item');
+    } catch (err) {
+      console.error('Error creating item:', err);
+      error('Gagal membuat item', err instanceof Error ? err.message : 'Terjadi kesalahan saat membuat item');
     } finally {
       setIsLoading(false);
     }
@@ -729,9 +733,9 @@ const InventoryPage: React.FC<{}> = () => {
       await fetchItems();
       closeSidebar();
       success('Item berhasil diperbarui', `Perubahan pada ${formData.name} telah disimpan`);
-    } catch (error) {
-      console.error('Error updating item:', error);
-      error('Gagal memperbarui item', error instanceof Error ? error.message : 'Terjadi kesalahan saat memperbarui item');
+    } catch (err) {
+      console.error('Error updating item:', err);
+      error('Gagal memperbarui item', err instanceof Error ? err.message : 'Terjadi kesalahan saat memperbarui item');
     } finally {
       setIsLoading(false);
     }
@@ -835,7 +839,7 @@ const InventoryPage: React.FC<{}> = () => {
       return;
     }
 
-    const transactionItems = sidebar.data?.items || [];
+    const transactionItems = (sidebar.data as { items: Item[] })?.items || [];
     const materialsToProcess = transactionItems.filter((item: Item) => item.category?.type === CategoryType.MATERIAL);
     const toolsToProcess = transactionItems.filter((item: Item) => item.category?.type === CategoryType.TOOL);
 
@@ -849,7 +853,7 @@ const InventoryPage: React.FC<{}> = () => {
           purpose: unifiedTransactionData.purpose,
           type: TransactionType.REQUEST,
           notes: unifiedTransactionData.notes,
-          items: materialsToProcess.map(item => ({
+          items: materialsToProcess.map((item: Item) => ({
             itemId: item.id,
             quantity: 1,
             notes: ''
@@ -881,7 +885,7 @@ const InventoryPage: React.FC<{}> = () => {
           type: TransactionType.BORROWING,
           expectedReturnDate: unifiedTransactionData.expectedReturnDate,
           notes: unifiedTransactionData.notes,
-          items: toolsToProcess.map(item => ({
+          items: toolsToProcess.map((item: Item) => ({
             itemId: item.id,
             quantity: 1,
             notes: ''
@@ -907,9 +911,9 @@ const InventoryPage: React.FC<{}> = () => {
       setSelectedItems(new Set());
       closeSidebar();
       success('Transaksi berhasil diproses', `${materialsToProcess.length + toolsToProcess.length} item telah diproses`);
-    } catch (error) {
-      console.error('Error processing transaction:', error);
-      error('Gagal memproses transaksi', error instanceof Error ? error.message : 'Terjadi kesalahan saat memproses transaksi');
+    } catch (err) {
+      console.error('Error processing transaction:', err);
+      error('Gagal memproses transaksi', err instanceof Error ? err.message : 'Terjadi kesalahan saat memproses transaksi');
     } finally {
       setIsLoading(false);
     }
@@ -942,7 +946,7 @@ const InventoryPage: React.FC<{}> = () => {
     }
   }
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const response = await fetch('/api/categories')
       if (response.ok) {
@@ -961,9 +965,9 @@ const InventoryPage: React.FC<{}> = () => {
     } catch (error) {
       console.error('Error fetching categories:', error)
     }
-  }
+  }, [formData.categoryId])
 
-  const fetchLocations = async () => {
+  const fetchLocations = useCallback(async () => {
     try {
       const response = await fetch('/api/locations')
       if (response.ok) {
@@ -982,7 +986,7 @@ const InventoryPage: React.FC<{}> = () => {
     } catch (error) {
       console.error('Error fetching locations:', error)
     }
-  }
+  }, [formData.locationId])
 
   // Filter items based on active tab and search
   const filteredItems = items.filter(item => {
@@ -1014,13 +1018,13 @@ const InventoryPage: React.FC<{}> = () => {
 
 
   // Multi-select handlers
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = useCallback((checked: boolean) => {
     if (checked) {
       setSelectedItems(new Set(filteredItems.map(item => item.id)))
     } else {
       setSelectedItems(new Set())
     }
-  }
+  }, [filteredItems])
 
   const handleSelectItem = (itemId: string, checked: boolean) => {
     const newSelected = new Set(selectedItems)
@@ -1033,7 +1037,7 @@ const InventoryPage: React.FC<{}> = () => {
   }
 
   // Sidebar handlers
-  const openSidebar = (panel: SidebarPanel, data?: any) => {
+  const openSidebar = useCallback((panel: SidebarPanel, data?: Item | { items: Item[] }) => {
     // Set default values when opening add-item form
     if (panel === 'add-item') {
       const materialsCategory = categories.find(cat => cat.name === 'Materials')
@@ -1067,7 +1071,7 @@ const InventoryPage: React.FC<{}> = () => {
 
     // Set default values when opening transaction form
     if (panel === 'transaction') {
-      const transactionItems = data?.items || [];
+      const transactionItems = (data as { items: Item[] })?.items || [];
       const selectedMaterialsInTransaction = transactionItems.filter((item: Item) => item.category?.type === CategoryType.MATERIAL);
       const selectedToolsInTransaction = transactionItems.filter((item: Item) => item.category?.type === CategoryType.TOOL);
 
@@ -1090,10 +1094,10 @@ const InventoryPage: React.FC<{}> = () => {
     }
 
     setSidebar({ isOpen: true, panel, data })
-  }
+  }, [categories, locations])
 
   const closeSidebar = () => {
-    setSidebar({ isOpen: false, panel: 'none', data: null })
+    setSidebar({ isOpen: false, panel: 'none', data: undefined })
     // Form data will be reset when opening add-item form with defaults
     setBorrowingData({
       borrowerName: '',
@@ -1122,10 +1126,10 @@ const InventoryPage: React.FC<{}> = () => {
     const total = filteredItems.length
     const available = filteredItems.filter(item =>
       item.status === ItemStatus.AVAILABLE &&
-      !(item.borrowings && item.borrowings.some((bi: any) => bi.status === 'ACTIVE'))
+      !(item.borrowings && item.borrowings.some((bi: { status: string }) => bi.status === 'ACTIVE'))
     ).length
     const loaned = filteredItems.filter(item =>
-      item.borrowings && item.borrowings.some((bi: any) => bi.status === 'ACTIVE')
+      item.borrowings && item.borrowings.some((bi: { status: string }) => bi.status === 'ACTIVE')
     ).length
     const lowStock = filteredItems.filter(item =>
       item.stock <= item.minStock && item.stock > 0
@@ -1176,7 +1180,7 @@ const InventoryPage: React.FC<{}> = () => {
     if (!item) return;
 
     // Check if it's a tool that's currently being borrowed
-    const isCurrentlyBorrowed = item.borrowings && item.borrowings.some((b: any) => b.status === 'ACTIVE');
+    const isCurrentlyBorrowed = item.borrowings && item.borrowings.some((b: { status: string }) => b.status === 'ACTIVE');
     const isTool = item.category?.type === CategoryType.TOOL;
 
     if (isTool && isCurrentlyBorrowed) {
@@ -1256,7 +1260,7 @@ const InventoryPage: React.FC<{}> = () => {
     switch (action) {
       case 'process':
         // Open unified transaction form
-        openSidebar('transaction', { items: selectedItemsData })
+        openSidebar('transaction', { items: selectedItemsData } as { items: Item[] })
         break
       case 'bulk-edit':
         // Handle bulk edit logic
@@ -1281,7 +1285,7 @@ const InventoryPage: React.FC<{}> = () => {
           : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
       }`}>
         {items.map((item) => {
-          const isLoaned = item.borrowings && item.borrowings.some((b: any) => b.status === 'ACTIVE');
+          const isLoaned = item.borrowings && item.borrowings.some((b: { status: string }) => b.status === 'ACTIVE');
           const statusConfig = getStatusConfig(item.status, isLoaned);
           const isSelected = selectedItems.has(item.id);
 
@@ -1306,9 +1310,11 @@ const InventoryPage: React.FC<{}> = () => {
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 {item.imageUrl && (
-                  <img
+                  <Image
                     src={item.imageUrl}
                     alt={item.name}
+                    width={300}
+                    height={128}
                     className="w-full h-32 object-cover rounded-md mb-3"
                   />
                 )}
@@ -1355,7 +1361,7 @@ const InventoryPage: React.FC<{}> = () => {
         </thead>
         <tbody>
           {items.map((item) => {
-            const isLoaned = item.borrowings && item.borrowings.some((b: any) => b.status === 'ACTIVE');
+            const isLoaned = item.borrowings && item.borrowings.some((b: { status: string }) => b.status === 'ACTIVE');
             const statusConfig = getStatusConfig(item.status, isLoaned);
             const isSelected = selectedItems.has(item.id);
 
@@ -1574,7 +1580,7 @@ const InventoryPage: React.FC<{}> = () => {
                       {getSmartActions().map((action, index) => (
                         <Button
                           key={index}
-                          variant={action.variant as any}
+                          variant={action.variant as "primary" | "secondary" | "outline" | "ghost"}
                           size="sm"
                           onClick={() => handleAction(action.action)}
                           className="shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
