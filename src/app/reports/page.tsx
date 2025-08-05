@@ -77,11 +77,11 @@ interface ReportData {
   purpose?: string
   status?: string
   transactionDate?: string
-  items?: any[]
+  items?: Record<string, unknown>[]
   condition?: string
   utilizationRate?: number
   damageRate?: number
-  [key: string]: any
+  [key: string]: unknown
 }
 
 type ReportType = 'all-activities' | 'tools' | 'materials' | 'conditions-damage-utilization' | 'borrowings' | 'activities'
@@ -215,17 +215,17 @@ const ReportsContent: React.FC = () => {
       let result
 
       if (reportType === 'borrowings') {
-        const exportData = prepareBorrowingDataForExport(previewData.map((item: any) => ({
-          id: item.id,
-          borrowerName: item.borrowerName,
-          borrowDate: item.borrowDate,
-          returnDate: item.returnDate,
-          purpose: item.purpose,
-          status: item.status,
+        const exportData = prepareBorrowingDataForExport(previewData.map((item: Record<string, unknown>) => ({
+          id: item.id as string,
+          borrowerName: item.borrowerName as string,
+          borrowDate: item.borrowDate as string,
+          returnDate: item.returnDate as string | null,
+          purpose: item.purpose as string,
+          status: item.status as string,
           items: [{
             item: {
-              name: item.itemName,
-              category: { name: item.category }
+              name: item.itemName as string,
+              category: { name: item.category as string }
             },
             quantity: 1,
             returnedQuantity: item.status === 'RETURNED' ? 1 : 0
@@ -238,7 +238,7 @@ const ReportsContent: React.FC = () => {
           result = await exportToExcel(exportData, filters)
         }
       } else if (reportType === 'activities') {
-        const exportData = prepareActivityDataForExport(allActivitiesData.map((activity: any) => ({
+        const exportData = prepareActivityDataForExport(allActivitiesData.map((activity) => ({
           ...activity,
           createdAt: activity.createdAt.toString()
         })))

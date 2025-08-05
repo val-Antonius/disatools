@@ -48,7 +48,7 @@ interface ExportDataItem {
   stock?: number
   condition?: string
   location?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 interface ExportBorrowingData {
   id: string
@@ -602,24 +602,24 @@ export const exportEnhancedReportToPDF = async (
         break
       case 'conditions-damage-utilization':
         columns = ['Item', 'Kategori', 'Kondisi', 'Stok', 'Lokasi', 'Status']
-        rows = data.map((item: any) => [
-          item.itemName || item.name || '',
-          item.category || '',
-          item.condition || '',
-          item.stock?.toString() || item.quantity?.toString() || '0',
-          item.location || '',
-          item.status || ''
+        rows = data.map((item: Record<string, unknown>) => [
+          (item.itemName as string) || (item.name as string) || '',
+          (item.category as string) || '',
+          (item.condition as string) || '',
+          ((item.stock as number)?.toString()) || ((item.quantity as number)?.toString()) || '0',
+          (item.location as string) || '',
+          (item.status as string) || ''
         ])
         break
       default:
         columns = ['Data']
-        rows = data.map((item: any) => [JSON.stringify(item)])
+        rows = data.map((item: Record<string, unknown>) => [JSON.stringify(item)])
     }
 
     // Add table
     autoTable(doc, {
       head: [columns],
-      body: rows,
+      body: rows as string[][],
       startY: filters.dateFrom || filters.dateTo ? 40 : 30,
       styles: { fontSize: 8 },
       headStyles: { fillColor: [59, 130, 246] },
@@ -652,42 +652,42 @@ export const exportEnhancedReportToExcel = async (
     // Configure data based on report type
     switch (reportType) {
       case 'tools':
-        excelData = data.map((item: any, index: number) => ({
+        excelData = data.map((item: Record<string, unknown>, index: number) => ({
           'No': index + 1,
-          'Peminjam': item.requesterName || item.borrowerName || '',
-          'Tool': item.itemName || item.name || '',
-          'Kategori': item.category || '',
-          'Tanggal Pinjam': item.transactionDate ? formatDate(new Date(item.transactionDate)) : '',
-          'Tanggal Kembali': item.returnDate ? formatDate(new Date(item.returnDate)) : 'Belum dikembalikan',
-          'Tujuan': item.purpose || '',
-          'Status': item.status || ''
+          'Peminjam': (item.requesterName as string) || (item.borrowerName as string) || '',
+          'Tool': (item.itemName as string) || (item.name as string) || '',
+          'Kategori': (item.category as string) || '',
+          'Tanggal Pinjam': item.transactionDate ? formatDate(new Date(item.transactionDate as string)) : '',
+          'Tanggal Kembali': item.returnDate ? formatDate(new Date(item.returnDate as string)) : 'Belum dikembalikan',
+          'Tujuan': (item.purpose as string) || '',
+          'Status': (item.status as string) || ''
         }))
         break
       case 'materials':
-        excelData = data.map((item: any, index: number) => ({
+        excelData = data.map((item: Record<string, unknown>, index: number) => ({
           'No': index + 1,
-          'Peminta': item.requesterName || '',
-          'Material': item.itemName || item.name || '',
-          'Kategori': item.category || '',
-          'Tanggal': item.transactionDate ? formatDate(new Date(item.transactionDate)) : '',
-          'Quantity': item.quantity || 0,
-          'Tujuan': item.purpose || '',
-          'Status': item.status || ''
+          'Peminta': (item.requesterName as string) || '',
+          'Material': (item.itemName as string) || (item.name as string) || '',
+          'Kategori': (item.category as string) || '',
+          'Tanggal': item.transactionDate ? formatDate(new Date(item.transactionDate as string)) : '',
+          'Quantity': (item.quantity as number) || 0,
+          'Tujuan': (item.purpose as string) || '',
+          'Status': (item.status as string) || ''
         }))
         break
       case 'conditions-damage-utilization':
-        excelData = data.map((item: any, index: number) => ({
+        excelData = data.map((item: Record<string, unknown>, index: number) => ({
           'No': index + 1,
-          'Item': item.itemName || item.name || '',
-          'Kategori': item.category || '',
-          'Kondisi': item.condition || '',
-          'Stok': item.stock || item.quantity || 0,
-          'Lokasi': item.location || '',
-          'Status': item.status || ''
+          'Item': (item.itemName as string) || (item.name as string) || '',
+          'Kategori': (item.category as string) || '',
+          'Kondisi': (item.condition as string) || '',
+          'Stok': (item.stock as number) || (item.quantity as number) || 0,
+          'Lokasi': (item.location as string) || '',
+          'Status': (item.status as string) || ''
         }))
         break
       default:
-        excelData = data.map((item: any, index: number) => ({
+        excelData = data.map((item: Record<string, unknown>, index: number) => ({
           'No': index + 1,
           'Data': JSON.stringify(item)
         }))

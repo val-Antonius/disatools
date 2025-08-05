@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { CategoryType } from '@/types'
 
 // Ensure default categories exist
 async function ensureDefaultCategories() {

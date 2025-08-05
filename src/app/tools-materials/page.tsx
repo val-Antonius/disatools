@@ -637,7 +637,7 @@ const InventoryPage: React.FC = () => {
   const [unifiedTransactionData, setUnifiedTransactionData] = useState<TransactionFormData>({
     requesterName: '',
     purpose: '',
-    type: TransactionType.MATERIAL_REQUEST,
+    type: TransactionType.REQUEST,
     expectedReturnDate: '',
     notes: '',
     items: []
@@ -716,7 +716,7 @@ const InventoryPage: React.FC = () => {
 
   const handleEditItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sidebar.data?.id) return;
+    if (!sidebar.data || !('id' in sidebar.data)) return;
 
     setIsLoading(true);
     try {
@@ -1056,7 +1056,7 @@ const InventoryPage: React.FC = () => {
     }
 
     // Set form data when opening edit-item form
-    if (panel === 'edit-item' && data) {
+    if (panel === 'edit-item' && data && 'id' in data) {
       setFormData({
         name: data.name || '',
         description: data.description || '',
@@ -1078,9 +1078,14 @@ const InventoryPage: React.FC = () => {
       setUnifiedTransactionData({
         requesterName: '',
         purpose: '',
+        type: TransactionType.REQUEST,
         expectedReturnDate: '',
         notes: '',
-        selectedItems: transactionItems
+        items: transactionItems.map(item => ({
+          itemId: item.id,
+          quantity: 1,
+          notes: ''
+        }))
       });
 
       // Set default tab based on what items are selected

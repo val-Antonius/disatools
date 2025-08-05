@@ -76,14 +76,14 @@ const NotificationItem: React.FC<{
     return () => clearTimeout(timer)
   }, [])
 
-  React.useEffect(() => {
+  React.  useEffect(() => {
     if (notification.duration && notification.duration > 0) {
       const timer = setTimeout(() => {
         handleRemove()
       }, notification.duration)
       return () => clearTimeout(timer)
     }
-  }, [notification.duration, handleRemove])
+  }, [notification.duration])
 
   const handleRemove = React.useCallback(() => {
     setIsRemoving(true)
