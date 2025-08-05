@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "start": "next start",
     "lint": "next lint",
+    "use:local": "copy .env.local .env",
+    "use:azure": "copy .env.azure .env",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
