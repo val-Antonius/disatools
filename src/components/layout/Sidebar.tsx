@@ -8,7 +8,7 @@ import {
   LayoutDashboard,
   Package,
   ArrowRightLeft,
-  BarChart3,
+
   FileText,
   Calendar,
   Settings
@@ -17,23 +17,18 @@ import {
 const navigation = [
   {
     name: 'Dashboard',
-    href: '/dashboard',
+    href: '/analytics',
     icon: LayoutDashboard
   },
   {
-    name: 'Manajemen Barang',
-    href: '/inventory',
+    name: 'Tools & Materials',
+    href: '/tools-materials',
     icon: Package
   },
   {
-    name: 'Peminjaman',
-    href: '/borrowing',
+    name: 'Aktivitas',
+    href: '/activities',
     icon: ArrowRightLeft
-  },
-  {
-    name: 'Analitik',
-    href: '/analytics',
-    icon: BarChart3
   },
   {
     name: 'Reporting',

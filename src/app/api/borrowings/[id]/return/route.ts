@@ -98,14 +98,28 @@ export async function POST(
           }
         })
 
-        // Update item stock (only good items go back to stock)
+        // Update item stock and condition
         const goodItemsReturned = returnItem.returnQuantity || 0
+        const damagedItemsReturned = returnItem.damagedQuantity || 0
+        const _lostItemsReturned = returnItem.lostQuantity || 0
+
+        // Update item stock (only good items go back to stock)
         if (goodItemsReturned > 0) {
           await tx.item.update({
             where: { id: borrowingItem.itemId },
             data: {
               stock: { increment: goodItemsReturned },
               status: 'AVAILABLE'
+            }
+          })
+        }
+
+        // If any items are damaged, update the item's condition to DAMAGED
+        if (damagedItemsReturned > 0 || returnItem.condition === ItemCondition.DAMAGED) {
+          await tx.item.update({
+            where: { id: borrowingItem.itemId },
+            data: {
+              condition: ItemCondition.DAMAGED
             }
           })
         }

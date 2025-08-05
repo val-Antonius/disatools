@@ -32,6 +32,24 @@ interface ActivityForExport {
   createdAt: string
   metadata?: Record<string, unknown>
 }
+
+// Generic export data interface
+interface ExportDataItem {
+  requesterName?: string
+  borrowerName?: string
+  itemName?: string
+  name?: string
+  category?: string
+  transactionDate?: string
+  returnDate?: string | null
+  purpose?: string
+  status?: string
+  quantity?: number
+  stock?: number
+  condition?: string
+  location?: string
+  [key: string]: any
+}
 interface ExportBorrowingData {
   id: string
   borrowerName: string
@@ -525,4 +543,173 @@ const getStatusText = (status: string): string => {
   }
 }
 
+// Export Enhanced Reports to PDF
+export const exportEnhancedReportToPDF = async (
+  data: Array<Record<string, unknown>>,
+  reportType: string,
+  filters: ExportFilters
+) => {
+  try {
+    const jsPDF = (await import('jspdf')).default
+    const autoTable = (await import('jspdf-autotable')).default
+
+    const doc = new jsPDF()
+
+    // Title
+    const title = `Laporan ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}`
+    doc.setFontSize(18)
+    doc.text(title, 20, 20)
+
+    // Date range
+    if (filters.dateFrom || filters.dateTo) {
+      doc.setFontSize(10)
+      const dateRange = `Periode: ${filters.dateFrom || 'Awal'} - ${filters.dateTo || 'Sekarang'}`
+      doc.text(dateRange, 20, 30)
+    }
+
+    // Generate timestamp
+    doc.setFontSize(8)
+    doc.text(`Generated: ${formatDateTime(new Date())}`, 20, doc.internal.pageSize.height - 10)
+
+    let columns: string[] = []
+    let rows: Array<Array<string | number | Date>> = []
+
+    // Configure columns and rows based on report type
+    switch (reportType) {
+      case 'tools':
+        columns = ['Peminjam', 'Tool', 'Kategori', 'Tanggal Pinjam', 'Tanggal Kembali', 'Tujuan', 'Status']
+        rows = data.map((item: ExportDataItem) => [
+          item.requesterName || item.borrowerName || '',
+          item.itemName || item.name || '',
+          item.category || '',
+          item.transactionDate ? formatDate(new Date(item.transactionDate)) : '',
+          item.returnDate ? formatDate(new Date(item.returnDate)) : 'Belum dikembalikan',
+          item.purpose || '',
+          item.status || ''
+        ])
+        break
+      case 'materials':
+        columns = ['Peminta', 'Material', 'Kategori', 'Tanggal', 'Quantity', 'Tujuan', 'Status']
+        rows = data.map((item: ExportDataItem) => [
+          item.requesterName || '',
+          item.itemName || item.name || '',
+          item.category || '',
+          item.transactionDate ? formatDate(new Date(item.transactionDate)) : '',
+          item.quantity?.toString() || '0',
+          item.purpose || '',
+          item.status || ''
+        ])
+        break
+      case 'conditions-damage-utilization':
+        columns = ['Item', 'Kategori', 'Kondisi', 'Stok', 'Lokasi', 'Status']
+        rows = data.map((item: any) => [
+          item.itemName || item.name || '',
+          item.category || '',
+          item.condition || '',
+          item.stock?.toString() || item.quantity?.toString() || '0',
+          item.location || '',
+          item.status || ''
+        ])
+        break
+      default:
+        columns = ['Data']
+        rows = data.map((item: any) => [JSON.stringify(item)])
+    }
+
+    // Add table
+    autoTable(doc, {
+      head: [columns],
+      body: rows,
+      startY: filters.dateFrom || filters.dateTo ? 40 : 30,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 130, 246] },
+      alternateRowStyles: { fillColor: [248, 250, 252] }
+    })
+
+    // Save file
+    const timestamp = new Date().toISOString().split('T')[0]
+    const filename = `${reportType}-report-${timestamp}.pdf`
+    doc.save(filename)
+
+    return { success: true, filename }
+  } catch (error) {
+    console.error('Error generating enhanced report PDF:', error)
+    return { success: false, error: 'Failed to generate PDF' }
+  }
+}
+
+// Export Enhanced Reports to Excel
+export const exportEnhancedReportToExcel = async (
+  data: Array<Record<string, unknown>>,
+  reportType: string,
+  _filters: ExportFilters
+) => {
+  try {
+    const XLSX = await import('xlsx')
+
+    let excelData: Array<Record<string, unknown>> = []
+
+    // Configure data based on report type
+    switch (reportType) {
+      case 'tools':
+        excelData = data.map((item: any, index: number) => ({
+          'No': index + 1,
+          'Peminjam': item.requesterName || item.borrowerName || '',
+          'Tool': item.itemName || item.name || '',
+          'Kategori': item.category || '',
+          'Tanggal Pinjam': item.transactionDate ? formatDate(new Date(item.transactionDate)) : '',
+          'Tanggal Kembali': item.returnDate ? formatDate(new Date(item.returnDate)) : 'Belum dikembalikan',
+          'Tujuan': item.purpose || '',
+          'Status': item.status || ''
+        }))
+        break
+      case 'materials':
+        excelData = data.map((item: any, index: number) => ({
+          'No': index + 1,
+          'Peminta': item.requesterName || '',
+          'Material': item.itemName || item.name || '',
+          'Kategori': item.category || '',
+          'Tanggal': item.transactionDate ? formatDate(new Date(item.transactionDate)) : '',
+          'Quantity': item.quantity || 0,
+          'Tujuan': item.purpose || '',
+          'Status': item.status || ''
+        }))
+        break
+      case 'conditions-damage-utilization':
+        excelData = data.map((item: any, index: number) => ({
+          'No': index + 1,
+          'Item': item.itemName || item.name || '',
+          'Kategori': item.category || '',
+          'Kondisi': item.condition || '',
+          'Stok': item.stock || item.quantity || 0,
+          'Lokasi': item.location || '',
+          'Status': item.status || ''
+        }))
+        break
+      default:
+        excelData = data.map((item: any, index: number) => ({
+          'No': index + 1,
+          'Data': JSON.stringify(item)
+        }))
+    }
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(excelData)
+
+    // Add worksheet to workbook
+    const sheetName = `Laporan ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}`
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+
+    // Save file
+    const timestamp = new Date().toISOString().split('T')[0]
+    const filename = `${reportType}-report-${timestamp}.xlsx`
+    XLSX.writeFile(wb, filename)
+
+    return { success: true, filename }
+  } catch (error) {
+    console.error('Error generating enhanced report Excel:', error)
+    return { success: false, error: 'Failed to generate Excel' }
+  }
+}
 

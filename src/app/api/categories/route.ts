@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// Ensure default categories exist
+async function ensureDefaultCategories() {
+  const defaultCategories = [
+    { name: 'Materials', type: 'MATERIAL', description: 'Bahan habis pakai untuk keperluan operasional' },
+    { name: 'Tools', type: 'TOOL', description: 'Peralatan yang dapat dipinjam dan dikembalikan' }
+  ]
+
+  for (const category of defaultCategories) {
+    await prisma.category.upsert({
+      where: { name: category.name },
+      update: {},
+      create: {
+        ...category,
+        type: category.type as CategoryType
+      }
+    })
+  }
+}
+
 // GET /api/categories - Get all categories
 export async function GET(_request: NextRequest) {
   try {
+    // Ensure default categories exist
+    await ensureDefaultCategories()
+
     const categories = await prisma.category.findMany({
       include: {
         _count: {
@@ -30,11 +52,19 @@ export async function GET(_request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, description } = body
+    const { name, type, description } = body
 
-    if (!name) {
+    if (!name || !type) {
       return NextResponse.json(
-        { success: false, error: 'Category name is required' },
+        { success: false, error: 'Category name and type are required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate type
+    if (type !== 'MATERIAL' && type !== 'TOOL') {
+      return NextResponse.json(
+        { success: false, error: 'Category type must be MATERIAL or TOOL' },
         { status: 400 }
       )
     }
@@ -52,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const category = await prisma.category.create({
-      data: { name, description }
+      data: { name, type, description }
     })
 
     return NextResponse.json({

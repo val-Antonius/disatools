@@ -14,7 +14,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       
       {/* Main content */}
       <div className="ml-64">
-        <main className="p-6">
+        <main className="p-4">
           {children}
         </main>
       </div>

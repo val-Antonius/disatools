@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
       whereClause.borrowing = {
         returnDate: {}
       }
-      if (dateFrom) whereClause.borrowing.returnDate.gte = new Date(dateFrom)
-      if (dateTo) whereClause.borrowing.returnDate.lte = new Date(dateTo)
+      if (dateFrom) (whereClause.borrowing as any).returnDate.gte = new Date(dateFrom)
+      if (dateTo) (whereClause.borrowing as any).returnDate.lte = new Date(dateTo)
     }
 
     if (category) {

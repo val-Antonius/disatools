@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `items` ADD COLUMN `condition` ENUM('GOOD', 'DAMAGED', 'LOST', 'INCOMPLETE') NOT NULL DEFAULT 'GOOD';

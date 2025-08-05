@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { NotificationProvider } from "@/components/ui/NotificationProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -18,9 +19,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+    <html lang="id" suppressHydrationWarning>
+      <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+        <NotificationProvider>
+          {children}
+        </NotificationProvider>
       </body>
     </html>
   );

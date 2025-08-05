@@ -12,14 +12,14 @@ export async function GET(request: NextRequest) {
     const condition = searchParams.get('condition')
 
     // Build where clause for filtering
-    const whereClause: Record<string, unknown> = {}
+    const whereClause: Record<string, any> = {}
 
     if (dateFrom || dateTo) {
       whereClause.borrowing = {
         borrowDate: {}
       }
-      if (dateFrom) whereClause.borrowing.borrowDate.gte = new Date(dateFrom)
-      if (dateTo) whereClause.borrowing.borrowDate.lte = new Date(dateTo)
+      if (dateFrom) (whereClause.borrowing as any).borrowDate.gte = new Date(dateFrom)
+      if (dateTo) (whereClause.borrowing as any).borrowDate.lte = new Date(dateTo)
     }
 
     if (category) {

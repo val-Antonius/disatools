@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, description, stock, minStock, categoryId, locationId } = body
+    const { name, description, imageUrl, stock, minStock, condition, categoryId, locationId } = body
 
     // Validate required fields
     if (!name || !categoryId || !locationId || stock === undefined || minStock === undefined) {
@@ -132,8 +132,10 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         description,
+        imageUrl,
         stock: parseInt(stock),
         minStock: parseInt(minStock),
+        condition,
         status,
         categoryId,
         locationId
