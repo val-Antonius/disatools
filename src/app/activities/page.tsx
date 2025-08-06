@@ -5,6 +5,8 @@ import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import { useNotifications } from '@/components/ui/NotificationProvider'
+import ConfirmationModal from '@/components/ui/ConfirmationModal'
 import { 
   Package, 
   Calendar, 
@@ -114,6 +116,9 @@ const isOverdue = (expectedReturnDate: Date | string, status: TransactionStatus)
 }
 
 const ActivitiesPage: React.FC = () => {
+  // Notification system
+  const { success, error, warning } = useNotifications()
+  
   // States
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -124,6 +129,21 @@ const ActivitiesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActivityTab>('tools')
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [sidebar, setSidebar] = useState<SidebarState>({ isOpen: false, panel: 'none' })
+  
+  // Confirmation modal state
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    variant?: 'danger' | 'warning' | 'info'
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    variant: 'warning'
+  })
   
   // Date filters
   const [dateFilters, setDateFilters] = useState({
@@ -251,35 +271,54 @@ const ActivitiesPage: React.FC = () => {
   const handleBulkDelete = async () => {
     if (selectedItems.size === 0) return
 
-    if (!confirm(`Apakah Anda yakin ingin menghapus ${selectedItems.size} riwayat aktivitas?\n\nTindakan ini tidak dapat dibatalkan.`)) {
-      return
-    }
+    setConfirmationModal({
+      isOpen: true,
+      title: 'Konfirmasi Hapus',
+      message: `Apakah Anda yakin ingin menghapus ${selectedItems.size} riwayat aktivitas? Tindakan ini tidak dapat dibatalkan.`,
+      onConfirm: async () => {
+        setIsLoading(true)
+        try {
+          const deletePromises = Array.from(selectedItems).map(id =>
+            fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+          )
 
-    setIsLoading(true)
-    try {
-      const deletePromises = Array.from(selectedItems).map(id =>
-        fetch(`/api/transactions/${id}`, { method: 'DELETE' })
-      )
+          const results = await Promise.all(deletePromises)
+          const failedDeletes = results.filter(response => !response.ok)
 
-      const results = await Promise.all(deletePromises)
-      const failedDeletes = results.filter(response => !response.ok)
-
-      if (failedDeletes.length === 0) {
-        await fetchTransactions()
-        setSelectedItems(new Set())
-        alert(`${selectedItems.size} riwayat berhasil dihapus`)
-      } else {
-        alert(`${results.length - failedDeletes.length} riwayat berhasil dihapus, ${failedDeletes.length} riwayat gagal dihapus`)
-        await fetchTransactions()
-        setSelectedItems(new Set())
-      }
-    } catch (error) {
-      console.error('Error bulk deleting transactions:', error)
-      alert('Gagal menghapus riwayat')
-    } finally {
-      setIsLoading(false)
-    }
+          if (failedDeletes.length === 0) {
+            await fetchTransactions()
+            setSelectedItems(new Set())
+            success(`${selectedItems.size} riwayat berhasil dihapus`)
+          } else {
+            warning(`${results.length - failedDeletes.length} riwayat berhasil dihapus, ${failedDeletes.length} riwayat gagal dihapus`)
+            await fetchTransactions()
+            setSelectedItems(new Set())
+          }
+        } catch (err) {
+          console.error('Error bulk deleting transactions:', err)
+          error('Gagal menghapus riwayat', err instanceof Error ? err.message : undefined)
+        } finally {
+          setIsLoading(false)
+        }
+      },
+      variant: 'danger'
+    })
   }
+
+  const closeConfirmationModal = () => {
+    setConfirmationModal({
+      isOpen: false,
+      title: '',
+      message: '',
+      onConfirm: () => {},
+      variant: 'warning'
+    });
+  };
+
+  const handleConfirmAction = () => {
+    confirmationModal.onConfirm();
+    closeConfirmationModal();
+  };
 
   return (
     <AppLayout>
@@ -527,6 +566,19 @@ const ActivitiesPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          onClose={closeConfirmationModal}
+          onConfirm={handleConfirmAction}
+          title={confirmationModal.title}
+          message={confirmationModal.message}
+          variant={confirmationModal.variant}
+          confirmText="Konfirmasi"
+          cancelText="Batal"
+          isLoading={isLoading}
+        />
       </div>
     </AppLayout>
   )
@@ -713,6 +765,7 @@ const ReturnForm = ({ transaction, onClose, onSuccess }: {
   onClose: () => void
   onSuccess: () => void
 }) => {
+  const { success, error } = useNotifications()
   const [isLoading, setIsLoading] = useState(false)
   const [notes, setNotes] = useState('')
 
@@ -738,15 +791,15 @@ const ReturnForm = ({ transaction, onClose, onSuccess }: {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Gagal mengembalikan tool')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Gagal mengembalikan tool')
       }
 
-      alert('Tool berhasil dikembalikan')
+      success('Tool berhasil dikembalikan')
       onSuccess()
-    } catch (error) {
-      console.error('Error returning tool:', error)
-      alert(error instanceof Error ? error.message : 'Gagal mengembalikan tool')
+    } catch (err) {
+      console.error('Error returning tool:', err)
+      error('Gagal mengembalikan tool', err instanceof Error ? err.message : undefined)
     } finally {
       setIsLoading(false)
     }

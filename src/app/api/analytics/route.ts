@@ -159,12 +159,22 @@ export async function GET(_request: NextRequest) {
         }, 0) / returnedBorrowings.length
       : 0
 
+    // Calculate totalTools and totalMaterials
+    const totalTools = categoryDistribution
+      .filter(cat => cat.type === 'TOOL')
+      .reduce((sum, cat) => sum + cat._count.items, 0);
+    const totalMaterials = categoryDistribution
+      .filter(cat => cat.type === 'MATERIAL')
+      .reduce((sum, cat) => sum + cat._count.items, 0);
+
     const analyticsData = {
       categoryDistribution: categoryData,
       mostBorrowedItems: borrowedItemsData,
       monthlyBorrowingTrend: monthlyTrendData,
       summary: {
         totalItems,
+        totalTools,
+        totalMaterials,
         totalBorrowings,
         activeBorrowings,
         overdueBorrowings,

@@ -85,6 +85,7 @@ export interface Item {
   category?: Category;
   location?: Location;
   borrowings?: Borrowing[];
+  transactionItems?: TransactionItem[];
   activities?: Activity[];
 }
 

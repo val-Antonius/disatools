@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react'
 import Image from 'next/image'
 import { X, Image as ImageIcon } from 'lucide-react'
 import Button from './Button'
+import { useNotifications } from './NotificationProvider'
 
 interface ImageUploadProps {
   value?: string
@@ -23,15 +24,16 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const [isUploading, setIsUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { error } = useNotifications();
 
   const handleFileSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('File harus berupa gambar')
+      error('File harus berupa gambar');
       return
     }
 
     if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      alert('Ukuran file maksimal 5MB')
+      error('Ukuran file maksimal 5MB');
       return
     }
 
@@ -52,9 +54,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
       const data = await response.json()
       onChange(data.url)
-    } catch (error) {
-      console.error('Error uploading image:', error)
-      alert('Gagal mengupload gambar')
+    } catch (err) {
+      console.error('Error uploading image:', err)
+      error('Gagal mengupload gambar', err instanceof Error ? err.message : undefined)
     } finally {
       setIsUploading(false)
     }

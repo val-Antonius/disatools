@@ -190,7 +190,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       {children}
       
       {/* Notification Container */}
-      <div className="fixed top-4 right-4 z-50 pointer-events-none">
+      <div className="fixed top-4 right-4 z-[9999] pointer-events-none">
         <div className="flex flex-col-reverse">
           {notifications.map(notification => (
             <NotificationItem

@@ -9,6 +9,7 @@ import Input from '@/components/ui/Input'
 import { Plus, Search, Grid3X3, List, Eye, Edit2, Trash2, Package, AlertTriangle, X, Check, User } from 'lucide-react'
 import ImageUpload from '@/components/ui/ImageUpload'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
+import ConfirmationModal from '@/components/ui/ConfirmationModal'
 import { ItemStatus, Item, Category, Location, ItemFormData, BorrowingFormData, CategoryType, TransactionFormData, MaterialRequestFormData, ToolBorrowingFormData, TransactionType, ItemCondition } from '@/types'
 import { useNotifications } from '@/components/ui/NotificationProvider'
 
@@ -188,8 +189,8 @@ const ContextualSidebar = ({
               </select>
             </div>
 
-            <Input label="Stok" type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })} required />
-            <Input label="Stok Minimum" type="number" value={formData.minStock} onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) })} required />
+            <Input label="Stok" type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })} required />
+            <Input label="Stok Minimum" type="number" value={formData.minStock} onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })} required />
 
             {/* Condition Selection */}
             <div className="space-y-2">
@@ -268,7 +269,7 @@ const ContextualSidebar = ({
               <Input
                 type="number"
                 value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
                 required
               />
               {stockDifference !== 0 && (
@@ -282,7 +283,7 @@ const ContextualSidebar = ({
               )}
             </div>
 
-            <Input label="Stok Minimum" type="number" value={formData.minStock} onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) })} required />
+            <Input label="Stok Minimum" type="number" value={formData.minStock} onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })} required />
 
             {/* Condition Selection */}
             <div className="space-y-2">
@@ -333,15 +334,7 @@ const ContextualSidebar = ({
             </div>
           </div>
         );
-      case 'transaction':
-        return (
-          <form onSubmit={handleSubmitBorrowing} className="space-y-4">
-            <Input label="Nama Peminjam" value={borrowingData.borrowerName} onChange={(e) => setBorrowingData({ ...borrowingData, borrowerName: e.target.value })} required />
-            <Input label="Tujuan" value={borrowingData.purpose} onChange={(e) => setBorrowingData({ ...borrowingData, purpose: e.target.value })} required />
-            <Input label="Tanggal Kembali" type="date" value={borrowingData.expectedReturnDate} onChange={(e) => setBorrowingData({ ...borrowingData, expectedReturnDate: e.target.value })} required />
-            <Button type="submit" loading={isLoading} className="w-full">Konfirmasi Peminjaman</Button>
-          </form>
-        );
+
       case 'material-request':
         const materialItems = (sidebar.data as { items: Item[] })?.items || [];
         return (
@@ -595,6 +588,20 @@ const InventoryPage: React.FC = () => {
   const [_editingField, _setEditingField] = useState<{ itemId: string, field: string } | null>(null)
   const [_hoveredItem, _setHoveredItem] = useState<string | null>(null)
 
+  // Confirmation modal state
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+    variant?: 'danger' | 'warning' | 'info'
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    variant: 'warning'
+  })
 
 
   // Form data states
@@ -754,9 +761,9 @@ const InventoryPage: React.FC = () => {
       if (!response.ok) throw new Error('Gagal meminjam item');
       await fetchItems();
       closeSidebar();
-    } catch (error) {
-      console.error('Error submitting borrowing:', error);
-      alert('Gagal meminjam item');
+    } catch (err) {
+      console.error('Error submitting borrowing:', err);
+      error('Gagal meminjam item', err instanceof Error ? err.message : undefined);
     } finally {
       setIsLoading(false);
     }
@@ -782,16 +789,16 @@ const InventoryPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Gagal meminta material');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Gagal meminta material');
       }
 
       await fetchItems();
       closeSidebar();
-      alert('Permintaan material berhasil diproses');
-    } catch (error) {
-      console.error('Error submitting material request:', error);
-      alert(error instanceof Error ? error.message : 'Gagal meminta material');
+      success('Permintaan material berhasil diproses');
+    } catch (err) {
+      console.error('Error submitting material request:', err);
+      error('Gagal meminta material', err instanceof Error ? err.message : undefined);
     } finally {
       setIsLoading(false);
     }
@@ -817,16 +824,16 @@ const InventoryPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Gagal meminjam tools');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Gagal meminjam tools');
       }
 
       await fetchItems();
       closeSidebar();
-      alert('Peminjaman tools berhasil diproses');
-    } catch (error) {
-      console.error('Error submitting tool borrowing:', error);
-      alert(error instanceof Error ? error.message : 'Gagal meminjam tools');
+      success('Peminjaman tools berhasil diproses');
+    } catch (err) {
+      console.error('Error submitting tool borrowing:', err);
+      error('Gagal meminjam tools', err instanceof Error ? err.message : undefined);
     } finally {
       setIsLoading(false);
     }
@@ -1197,65 +1204,97 @@ const InventoryPage: React.FC = () => {
       ? `Apakah Anda yakin ingin menghapus tool "${itemName}"?\n\n⚠️ Tool ini akan dihapus dari daftar, namun riwayat peminjaman akan tetap tersimpan.\n\nTindakan ini tidak dapat dibatalkan.`
       : `Apakah Anda yakin ingin menghapus material "${itemName}"?\n\n⚠️ Material ini akan dihapus dari daftar, namun riwayat penggunaan akan tetap tersimpan.\n\nTindakan ini tidak dapat dibatalkan.`;
 
-    if (!confirm(confirmMessage)) {
-      return
-    }
+    const onConfirm = async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetch(`/api/tools-materials/${itemId}`, {
+          method: 'DELETE'
+        })
 
-    setIsLoading(true)
-    try {
-      const response = await fetch(`/api/tools-materials/${itemId}`, {
-        method: 'DELETE'
-      })
-
-      if (response.ok) {
-        await fetchItems()
-        closeSidebar()
-        success(`${isTool ? 'Tool' : 'Material'} berhasil dihapus`, 'Riwayat aktivitas tetap tersimpan untuk keperluan audit')
-      } else {
-        const errorData = await response.json()
-        error('Gagal menghapus item', errorData.error || 'Terjadi kesalahan saat menghapus item')
+        if (response.ok) {
+          await fetchItems()
+          closeSidebar()
+          success(`${isTool ? 'Tool' : 'Material'} berhasil dihapus`, 'Riwayat aktivitas tetap tersimpan untuk keperluan audit')
+        } else {
+          const errorData = await response.json()
+          error('Gagal menghapus item', errorData.error || 'Terjadi kesalahan saat menghapus item')
+        }
+      } catch (err) {
+        console.error('Error deleting item:', err)
+        error('Gagal menghapus item', 'Terjadi kesalahan saat menghapus item')
+      } finally {
+        setIsLoading(false)
       }
-    } catch (err) {
-      console.error('Error deleting item:', err)
-      error('Gagal menghapus item', 'Terjadi kesalahan saat menghapus item')
-    } finally {
-      setIsLoading(false)
-    }
+    };
+
+    setConfirmationModal({
+      isOpen: true,
+      title: `Hapus ${isTool ? 'Tool' : 'Material'}`,
+      message: confirmMessage,
+      onConfirm,
+      variant: 'danger'
+    });
   }
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
-    const selectedItemsData = items.filter(item => selectedItems.has(item.id))
-    const itemNames = selectedItemsData.map(item => item.name).join(', ')
+    // selectedItems is always a Set<string>
+    const selectedItemsData = items.filter(item => selectedItems.has(item.id));
 
-    if (!confirm(`Apakah Anda yakin ingin menghapus ${selectedItems.size} item berikut?\n\n${itemNames}\n\nTindakan ini tidak dapat dibatalkan.`)) {
-      return
+    // Identify borrowed tools (legacy and new system)
+    const borrowedTools = selectedItemsData.filter(item => {
+      const isTool = item.category?.type === CategoryType.TOOL;
+      // Legacy check
+      const isLegacyBorrowed = item.borrowings && item.borrowings.some((b: { status: string }) => b.status === 'ACTIVE');
+      // New system check
+      const isTransactionBorrowed = item.transactionItems && item.transactionItems.some(
+        (ti: any) => ti.status === 'ACTIVE' && ti.transaction && ti.transaction.type === 'BORROWING'
+      );
+      return isTool && (isLegacyBorrowed || isTransactionBorrowed);
+    });
+
+    if (borrowedTools.length > 0) {
+      const names = borrowedTools.map(item => item.name).join(', ');
+      warning('Tidak dapat menghapus', `Beberapa tools sedang dipinjam dan tidak dapat dihapus: ${names}`);
+      return;
     }
 
-    setIsLoading(true)
-    try {
-      const deletePromises = Array.from(selectedItems).map(itemId =>
-        fetch(`/api/tools-materials/${itemId}`, { method: 'DELETE' })
-      )
+    const itemNames = selectedItemsData.map(item => item.name).join(', ');
 
-      const results = await Promise.all(deletePromises)
-      const failedDeletes = results.filter(response => !response.ok)
+    const onConfirm = async () => {
+      setIsLoading(true);
+      try {
+        const deletePromises = Array.from(selectedItems).map(itemId =>
+          fetch(`/api/tools-materials/${itemId}`, { method: 'DELETE' })
+        );
 
-      if (failedDeletes.length === 0) {
-        await fetchItems()
-        setSelectedItems(new Set())
-        success('Penghapusan berhasil', `${selectedItems.size} item berhasil dihapus`)
-      } else {
-        warning('Penghapusan sebagian berhasil', `${results.length - failedDeletes.length} item berhasil dihapus, ${failedDeletes.length} item gagal dihapus`)
-        await fetchItems()
-        setSelectedItems(new Set())
+        const results = await Promise.all(deletePromises);
+        const failedDeletes = results.filter(response => !response.ok);
+
+        if (failedDeletes.length === 0) {
+          await fetchItems();
+          setSelectedItems(new Set());
+          success('Penghapusan berhasil', `${selectedItems.size} item berhasil dihapus`);
+        } else {
+          warning('Penghapusan sebagian berhasil', `${selectedItems.size - failedDeletes.length} item berhasil dihapus, ${failedDeletes.length} item gagal dihapus`);
+          await fetchItems();
+          setSelectedItems(new Set());
+        }
+      } catch (err) {
+        console.error('Error bulk deleting items:', err);
+        error('Gagal menghapus item', 'Terjadi kesalahan saat menghapus item');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error('Error bulk deleting items:', err)
-      error('Gagal menghapus item', 'Terjadi kesalahan saat menghapus item')
-    } finally {
-      setIsLoading(false)
-    }
+    };
+
+    setConfirmationModal({
+      isOpen: true,
+      title: `Hapus ${selectedItems.size} Item`,
+      message: `Apakah Anda yakin ingin menghapus ${selectedItems.size} item berikut?\n\n${itemNames}\n\nTindakan ini tidak dapat dibatalkan.`,
+      onConfirm,
+      variant: 'danger'
+    });
   }
 
   // Action handlers
@@ -1401,6 +1440,21 @@ const InventoryPage: React.FC = () => {
         </tbody>
       </table>
     );
+  };
+
+  const closeConfirmationModal = () => {
+    setConfirmationModal({
+      isOpen: false,
+      title: '',
+      message: '',
+      onConfirm: () => {},
+      variant: 'warning'
+    });
+  };
+
+  const handleConfirmAction = () => {
+    confirmationModal.onConfirm();
+    closeConfirmationModal();
   };
 
   return (
@@ -1654,6 +1708,19 @@ const InventoryPage: React.FC = () => {
           isLoading={isLoading}
         />
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmationModal.isOpen}
+        onClose={closeConfirmationModal}
+        onConfirm={handleConfirmAction}
+        title={confirmationModal.title}
+        message={confirmationModal.message}
+        variant={confirmationModal.variant}
+        confirmText="Konfirmasi"
+        cancelText="Batal"
+        isLoading={isLoading}
+      />
     </AppLayout>
   );
 };

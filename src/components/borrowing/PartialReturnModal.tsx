@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
+import { useNotifications } from '@/components/ui/NotificationProvider'
 import { Package, CheckCircle, AlertCircle } from 'lucide-react'
 import { Borrowing, BorrowingStatus, ReturnData } from '@/types'
 
@@ -22,6 +23,7 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
   onReturn,
   isLoading = false
 }) => {
+  const { error } = useNotifications()
   const [returnItems, setReturnItems] = useState<Array<{
     borrowingItemId: string
     returnQuantity: number
@@ -97,7 +99,7 @@ const PartialReturnModal: React.FC<PartialReturnModalProps> = ({
     const itemsToReturn = returnItems.filter(item => item.returnQuantity > 0)
 
     if (itemsToReturn.length === 0) {
-      alert('Pilih minimal satu barang untuk dikembalikan')
+      error('Pilih minimal satu barang untuk dikembalikan')
       return
     }
 

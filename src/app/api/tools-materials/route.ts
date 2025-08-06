@@ -61,6 +61,11 @@ export async function GET(request: NextRequest) {
         include: {
           category: true,
           location: true,
+          transactionItems: {
+            include: {
+              transaction: true
+            }
+          },
           _count: {
             select: { borrowingItems: true }
           }

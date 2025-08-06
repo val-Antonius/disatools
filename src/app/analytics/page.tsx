@@ -9,15 +9,15 @@ import { AnalyticsResponse, CategoryDistribution, MostBorrowedItem } from '@/typ
 // KPI Slider Component
 const KPISlider: React.FC<{
   totalItems: number;
+  totalTools: number;
+  totalMaterials: number;
   activeBorrowings: number;
   damagedItems: number;
   damagedReturns: number;
-}> = ({ totalItems, activeBorrowings, damagedItems, damagedReturns }) => {
+}> = ({ totalItems, totalTools, totalMaterials, activeBorrowings, damagedItems, damagedReturns }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   // Calculate derived KPIs
-  const totalTools = Math.floor(totalItems * 0.4) // Estimate 40% tools
-  const totalMaterials = totalItems - totalTools
   const materialsUsedLastWeek = Math.floor(totalMaterials * 0.15) // Estimate 15% used last week
 
   const kpiCards = [
@@ -308,6 +308,8 @@ const AnalyticsPage: React.FC = () => {
   const monthlyTrend = analyticsData?.monthlyBorrowingTrend || []
   const summary = analyticsData?.summary || {
     totalItems: 0,
+    totalTools: 0,
+    totalMaterials: 0,
     totalBorrowings: 0,
     activeBorrowings: 0,
     damagedItems: 0,
@@ -328,6 +330,8 @@ const AnalyticsPage: React.FC = () => {
         {/* KPI Cards Slider */}
         <KPISlider
           totalItems={summary.totalItems}
+          totalTools={summary.totalTools}
+          totalMaterials={summary.totalMaterials}
           activeBorrowings={summary.activeBorrowings}
           damagedItems={summary.damagedItems}
           damagedReturns={summary.damagedReturns}

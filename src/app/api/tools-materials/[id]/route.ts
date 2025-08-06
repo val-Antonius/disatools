@@ -158,12 +158,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    // Check if item exists
+    // Check if item exists and include both legacy and new borrowings
     const item = await prisma.item.findUnique({
       where: { id },
       include: {
         borrowingItems: {
           where: { status: 'ACTIVE' }
+        },
+        transactionItems: {
+          where: { status: 'ACTIVE' },
+          include: {
+            transaction: true
+          }
         }
       }
     })
@@ -175,10 +181,24 @@ export async function DELETE(
       )
     }
 
-    // Check if item has active borrowings
+    // Check if item has active borrowings (legacy)
     if (item.borrowingItems.length > 0) {
       return NextResponse.json(
         { success: false, error: 'Cannot delete item with active borrowings' },
+        { status: 400 }
+      )
+    }
+
+    // Check if item has active borrowings (new transaction system)
+    const hasActiveToolBorrowing = item.transactionItems.some(
+      (ti) =>
+        ti.status === 'ACTIVE' &&
+        ti.transaction &&
+        ti.transaction.type === 'BORROWING'
+    )
+    if (hasActiveToolBorrowing) {
+      return NextResponse.json(
+        { success: false, error: 'Cannot delete tool that is currently borrowed (active transaction)' },
         { status: 400 }
       )
     }
