@@ -57,21 +57,20 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   const styles = getVariantStyles()
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="p-6">
-        <div className={`flex items-start space-x-3 p-4 rounded-lg border ${styles.bgColor} ${styles.borderColor}`}>
-          <AlertTriangle className={`h-6 w-6 ${styles.iconColor} flex-shrink-0 mt-0.5`} />
+    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="p-8 sm:p-10 bg-white rounded-2xl shadow-2xl max-w-md w-full">
+        <div className={`flex items-start space-x-4 p-4 rounded-xl border ${styles.bgColor} ${styles.borderColor} mb-6`}>
+          <AlertTriangle className={`h-8 w-8 ${styles.iconColor} flex-shrink-0 mt-1`} />
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
               {title}
             </h3>
-            <p className="text-sm text-gray-600 whitespace-pre-line">
+            <p className="text-base text-gray-700 break-words">
               {message}
             </p>
           </div>
         </div>
-
-        <div className="flex justify-end space-x-3 mt-6">
+        <div className="flex justify-end space-x-3 mt-8">
           <Button
             variant="ghost"
             onClick={onClose}

@@ -81,9 +81,6 @@ const ContextualSidebar = ({
   locations,
   handleCreateItem,
   handleEditItem,
-  borrowingData,
-  setBorrowingData,
-  handleSubmitBorrowing,
   materialRequestData,
   setMaterialRequestData,
   handleSubmitMaterialRequest,
@@ -108,9 +105,6 @@ const ContextualSidebar = ({
   locations: Location[];
   handleCreateItem: (e: React.FormEvent) => void;
   handleEditItem: (e: React.FormEvent) => void;
-  borrowingData: BorrowingFormData;
-  setBorrowingData: React.Dispatch<React.SetStateAction<BorrowingFormData>>;
-  handleSubmitBorrowing: (e: React.FormEvent) => void;
   materialRequestData: MaterialRequestFormData;
   setMaterialRequestData: React.Dispatch<React.SetStateAction<MaterialRequestFormData>>;
   handleSubmitMaterialRequest: (e: React.FormEvent) => void;
@@ -583,7 +577,7 @@ const InventoryPage: React.FC = () => {
   // New states for enhanced functionality
   const [activeTab, setActiveTab] = useState<InventoryTab>('materials')
   const [viewMode, setViewMode] = useState<ViewMode>('table')
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [selectedItems, setSelectedItems] = new Set<string>()
   const [sidebar, setSidebar] = useState<SidebarState>({ isOpen: false, panel: 'none' })
   const [_editingField, _setEditingField] = useState<{ itemId: string, field: string } | null>(null)
   const [_hoveredItem, _setHoveredItem] = useState<string | null>(null)
@@ -616,7 +610,7 @@ const InventoryPage: React.FC = () => {
     locationId: ''
   })
 
-  const [borrowingData, setBorrowingData] = useState<BorrowingFormData>({
+  const [_setBorrowingData, setBorrowingData] = useState<BorrowingFormData>({
     borrowerName: '',
     purpose: '',
     expectedReturnDate: '',
@@ -657,7 +651,7 @@ const InventoryPage: React.FC = () => {
     fetchItems()
     fetchCategories()
     fetchLocations()
-  }, [])
+  }, [fetchCategories, fetchLocations])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -697,7 +691,7 @@ const InventoryPage: React.FC = () => {
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [sidebar.isOpen, selectedItems.size])
+  }, [sidebar.isOpen, selectedItems.size, handleSelectAll, openSidebar, setSelectedItems])
 
   // Form Submission Handlers
   const handleCreateItem = async (e: React.FormEvent) => {
@@ -748,7 +742,7 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const handleSubmitBorrowing = async (e: React.FormEvent) => {
+  const _handleSubmitBorrowing = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
@@ -1031,7 +1025,7 @@ const InventoryPage: React.FC = () => {
     } else {
       setSelectedItems(new Set())
     }
-  }, [filteredItems])
+  }, [filteredItems, setSelectedItems])
 
   const handleSelectItem = (itemId: string, checked: boolean) => {
     const newSelected = new Set(selectedItems)
@@ -1111,13 +1105,6 @@ const InventoryPage: React.FC = () => {
   const closeSidebar = () => {
     setSidebar({ isOpen: false, panel: 'none', data: undefined })
     // Form data will be reset when opening add-item form with defaults
-    setBorrowingData({
-      borrowerName: '',
-      purpose: '',
-      expectedReturnDate: '',
-      notes: '',
-      items: []
-    })
     setMaterialRequestData({
       requesterName: '',
       purpose: '',
@@ -1248,7 +1235,7 @@ const InventoryPage: React.FC = () => {
       const isLegacyBorrowed = item.borrowings && item.borrowings.some((b: { status: string }) => b.status === 'ACTIVE');
       // New system check
       const isTransactionBorrowed = item.transactionItems && item.transactionItems.some(
-        (ti: any) => ti.status === 'ACTIVE' && ti.transaction && ti.transaction.type === 'BORROWING'
+        (ti: { status: string; transaction?: { type?: string } }) => ti.status === 'ACTIVE' && ti.transaction && ti.transaction.type === 'BORROWING'
       );
       return isTool && (isLegacyBorrowed || isTransactionBorrowed);
     });
@@ -1461,268 +1448,4 @@ const InventoryPage: React.FC = () => {
     <AppLayout>
       <div className="flex h-screen overflow-hidden">
         {/* Main Content */}
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebar.isOpen ? 'mr-96' : ''}`}>
-          {/* Header */}
-          <div className="flex justify-between items-center px-6 py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Tools & Materials</h1>
-              <p className="text-gray-600 text-sm">
-                Kelola materials (sekali pakai) dan tools (pinjam) dengan sistem terintegrasi
-              </p>
-            </div>
-          </div>
-
-          {/* Statistics Bar */}
-          <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-white">
-            <div className="flex items-center space-x-6">
-              {(() => {
-                const stats = getItemStats();
-                return (
-                  <>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Total: <span className="font-semibold text-gray-900">{stats.total}</span></span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Tersedia: <span className="font-semibold text-green-600">{stats.available}</span></span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">{activeTab === 'materials' ? 'Terpakai' : 'Dipinjam'}: <span className="font-semibold text-yellow-600">{stats.loaned}</span></span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Stok Rendah: <span className="font-semibold text-orange-600">{stats.lowStock}</span></span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Habis: <span className="font-semibold text-red-600">{stats.outOfStock}</span></span>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Content Area with integrated tabs and search */}
-          <Card className="mx-6 mt-6 mb-6 flex-1 flex flex-col overflow-hidden">
-            {/* Tab Navigation with Search */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => handleTabSwitch('materials')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'materials'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Package className="h-4 w-4 mr-2 inline" />
-                  Materials ({materialItems.length})
-                </button>
-                <button
-                  onClick={() => handleTabSwitch('tools')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'tools'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Package className="h-4 w-4 mr-2 inline" />
-                  Tools ({toolItems.length})
-                </button>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                <div className="w-80">
-                  <Input
-                    placeholder="Cari barang, kategori, atau lokasi..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    leftIcon={<Search className="h-4 w-4" />}
-                  />
-                </div>
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <Button
-                    variant={viewMode === 'table' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('table')}
-                    className="px-3 py-2"
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'card' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('card')}
-                    className="px-3 py-2"
-                  >
-                    <Grid3X3 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button
-                  onClick={() => openSidebar('add-item')}
-                  className="flex items-center space-x-2"
-                  title="Tambah Item Baru (Ctrl+N)"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Tambah Item</span>
-                </Button>
-              </div>
-            </div>
-
-            {/* Table Content */}
-            <div className="flex-1 overflow-auto p-6">
-              {isLoadingData ? (
-                <div className="flex justify-center items-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <span className="ml-2 text-gray-600">Memuat data...</span>
-                </div>
-              ) : filteredItems.length === 0 ? (
-                <div className="text-center py-12">
-                  <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Belum ada barang</h3>
-                  <p className="text-gray-600 mb-4">Mulai dengan menambahkan barang pertama</p>
-                  <Button onClick={() => openSidebar('add-item')} className="flex items-center space-x-2">
-                    <Plus className="h-4 w-4" />
-                    <span>Tambah Barang</span>
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {viewMode === 'table' ? (
-                    <TableView
-                      items={filteredItems}
-                      selectedItems={selectedItems}
-                      onSelectAll={handleSelectAll}
-                      onSelectItem={handleSelectItem}
-                      onOpenDetail={(item) => openSidebar('item-detail', item)}
-                    />
-                  ) : (
-                    <CardView
-                      items={filteredItems}
-                      selectedItems={selectedItems}
-                      onSelectItem={handleSelectItem}
-                      onOpenDetail={(item) => openSidebar('item-detail', item)}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          </Card>
-
-          {/* Floating Action Panel */}
-          {selectedItems.size > 0 && (
-            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 floating-panel">
-              <Card className="glass shadow-2xl border-gray-300 selection-ring">
-                <CardContent className="px-6 py-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="relative">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                          <span className="text-sm font-bold text-white">{selectedItems.size}</span>
-                        </div>
-                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
-                      </div>
-                      <div>
-                        <span className="text-sm font-semibold text-gray-800">
-                          {selectedItems.size} item terpilih
-                        </span>
-                        <div className="text-xs text-gray-500">
-                          {getSmartActions().length} aksi tersedia
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {getSmartActions().map((action, index) => (
-                        <Button
-                          key={index}
-                          variant={action.variant as "primary" | "secondary" | "outline" | "ghost"}
-                          size="sm"
-                          onClick={() => handleAction(action.action)}
-                          className="shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                        >
-                          {action.action === 'loan' && <User className="h-4 w-4 mr-1" />}
-                          {action.action === 'multi-loan' && <User className="h-4 w-4 mr-1" />}
-                          {action.action === 'return' && <Check className="h-4 w-4 mr-1" />}
-                          {action.action === 'maintenance' && <AlertTriangle className="h-4 w-4 mr-1" />}
-                          {action.action === 'bulk-edit' && <Edit2 className="h-4 w-4 mr-1" />}
-                          {action.action === 'delete' && <Trash2 className="h-4 w-4 mr-1" />}
-                          {action.label}
-                        </Button>
-                      ))}
-
-                      <div className="w-px h-6 bg-gray-300 mx-2"></div>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedItems(new Set())}
-                        className="p-2 hover:bg-red-50 hover:text-red-600 transition-colors"
-                        title="Batal pilih semua"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        {/* Contextual Sidebar: Now this is handled by the main ContextualSidebar component */}
-        <ContextualSidebar
-          sidebar={sidebar}
-          onClose={closeSidebar}
-          // Pass all necessary props for different panels
-          // For Add/Edit Panel
-          formData={formData}
-          setFormData={setFormData}
-          categories={categories}
-          locations={locations}
-          handleCreateItem={handleCreateItem}
-          handleEditItem={handleEditItem}
-          openSidebar={openSidebar}
-          // For Borrowing Panel
-          borrowingData={borrowingData}
-          setBorrowingData={setBorrowingData}
-          handleSubmitBorrowing={handleSubmitBorrowing}
-          // For Transaction Panel
-          materialRequestData={materialRequestData}
-          setMaterialRequestData={setMaterialRequestData}
-          handleSubmitMaterialRequest={handleSubmitMaterialRequest}
-          toolBorrowingData={toolBorrowingData}
-          setToolBorrowingData={setToolBorrowingData}
-          handleSubmitToolBorrowing={handleSubmitToolBorrowing}
-          unifiedTransactionData={unifiedTransactionData}
-          setUnifiedTransactionData={setUnifiedTransactionData}
-          handleUnifiedTransactionSubmit={handleUnifiedTransactionSubmit}
-          transactionTab={transactionTab}
-          setTransactionTab={setTransactionTab}
-          // For Deleting
-          handleDeleteItem={handleDeleteItem}
-          // General
-          isLoading={isLoading}
-        />
-      </div>
-
-      {/* Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={confirmationModal.isOpen}
-        onClose={closeConfirmationModal}
-        onConfirm={handleConfirmAction}
-        title={confirmationModal.title}
-        message={confirmationModal.message}
-        variant={confirmationModal.variant}
-        confirmText="Konfirmasi"
-        cancelText="Batal"
-        isLoading={isLoading}
-      />
-    </AppLayout>
-  );
-};
-
-export default InventoryPage;
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebar.isOpen ? 'mr-96' : ''}`

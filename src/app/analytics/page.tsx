@@ -14,11 +14,9 @@ const KPISlider: React.FC<{
   activeBorrowings: number;
   damagedItems: number;
   damagedReturns: number;
-}> = ({ totalItems, totalTools, totalMaterials, activeBorrowings, damagedItems, damagedReturns }) => {
+  materialsUsedLastMonth: number; // <-- add this prop
+}> = ({ totalItems, totalTools, totalMaterials, activeBorrowings, damagedItems, damagedReturns, materialsUsedLastMonth }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
-
-  // Calculate derived KPIs
-  const materialsUsedLastWeek = Math.floor(totalMaterials * 0.15) // Estimate 15% used last week
 
   const kpiCards = [
     {
@@ -58,8 +56,8 @@ const KPISlider: React.FC<{
       iconColor: 'text-orange-600'
     },
     {
-      title: 'Materials Dipakai (1 Minggu)',
-      value: materialsUsedLastWeek,
+      title: 'Materials Dipakai (1 Bulan)',
+      value: materialsUsedLastMonth, // <-- use real value
       icon: Clock,
       color: 'indigo',
       bgColor: 'bg-indigo-50',
@@ -272,10 +270,16 @@ const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
 const AnalyticsPage: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [materialsUsedLastMonth, setMaterialsUsedLastMonth] = useState(0)
 
   useEffect(() => {
     fetchAnalyticsData()
   }, [])
+
+  useEffect(() => {
+    // TODO: Fetch materials used in the last 30 days from backend when available
+    setMaterialsUsedLastMonth(0)
+  }, [analyticsData])
 
   const fetchAnalyticsData = async () => {
     setIsLoading(true)
@@ -335,6 +339,7 @@ const AnalyticsPage: React.FC = () => {
           activeBorrowings={summary.activeBorrowings}
           damagedItems={summary.damagedItems}
           damagedReturns={summary.damagedReturns}
+          materialsUsedLastMonth={materialsUsedLastMonth} // <-- pass prop
         />
 
         {/* Charts */}
