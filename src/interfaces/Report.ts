@@ -3,5 +3,5 @@ export interface ReportData {
   name: string;
   description: string;
   // Add other properties from your Report model here
-  [key: string]: any; // Allows for other properties not explicitly defined
+  [key: string]: string | number | boolean | Date | null | undefined | unknown; // Allow JsonValue and other complex types
 }

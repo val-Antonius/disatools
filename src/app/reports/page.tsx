@@ -7,13 +7,9 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { FileText, Download, Calendar, AlertCircle, Package, BarChart3, CheckCircle, Activity as ActivityIcon } from 'lucide-react'
-import { Activity, ItemCondition } from '@/types'
+import { ItemCondition } from '@/types'
 import {
-  exportToPDF,
-  exportToExcel,
   prepareBorrowingDataForExport,
-  exportActivitiesToPDF,
-  exportActivitiesToExcel,
   prepareActivityDataForExport,
   exportEnhancedReportToPDF,
   exportEnhancedReportToExcel
@@ -186,34 +182,22 @@ const ReportsContent: React.FC = () => {
 
       setPreviewData(result.data)
 
-      let headers: string[] = []
-      let reportTitle = ''
-      let preparedData: any[] = []
+      let preparedData: Array<Record<string, unknown>> = []
 
       switch (reportType) {
         case 'all-activities':
-          reportTitle = 'All Activities Report'
-          headers = ['Date', 'User', 'Activity', 'Item', 'Category', 'Details']
-          preparedData = prepareActivityDataForExport(result.data)
+          preparedData = prepareActivityDataForExport(result.data) as unknown as Array<Record<string, unknown>>
           break
         case 'tools':
-          reportTitle = 'Tools Borrowing Report'
-          headers = ['Borrower', 'Item', 'Category', 'Borrow Date', 'Return Date', 'Status']
-          preparedData = prepareBorrowingDataForExport(result.data)
+          preparedData = prepareBorrowingDataForExport(result.data) as unknown as Array<Record<string, unknown>>
           break
         case 'materials':
-          reportTitle = 'Materials Usage Report'
-          headers = ['Requester', 'Item', 'Category', 'Request Date', 'Quantity', 'Status']
-          preparedData = prepareBorrowingDataForExport(result.data)
+          preparedData = prepareBorrowingDataForExport(result.data) as unknown as Array<Record<string, unknown>>
           break
         case 'conditions-damage-utilization':
-          reportTitle = 'Item Condition & Utilization Report'
-          headers = ['Item', 'Category', 'Condition', 'Damage Rate', 'Utilization Rate']
-          preparedData = result.data
+          preparedData = result.data as unknown as Array<Record<string, unknown>>
           break
       }
-
-      const dateRange = `From ${filters.dateFrom || 'start'} to ${filters.dateTo || 'end'}`
 
       if (format === 'pdf') {
         exportEnhancedReportToPDF(preparedData, reportType, filters)
@@ -222,9 +206,10 @@ const ReportsContent: React.FC = () => {
       }
 
       setExportMessage({ type: 'success', message: `Successfully generated ${format.toUpperCase()} report.` })
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generating report:', error)
-      setExportMessage({ type: 'error', message: error.message || 'Failed to generate report.' })
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate report.'
+      setExportMessage({ type: 'error', message: errorMessage })
     } finally {
       setIsGenerating(false)
       setIsLoading(false)

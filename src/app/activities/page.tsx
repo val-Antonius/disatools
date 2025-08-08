@@ -759,7 +759,15 @@ const ActivitiesPage: React.FC = () => {
   }
 }
 
-// Return Form Component
+interface ReturnItem {
+  transactionItemId: string
+  itemName: string
+  maxQuantity: number
+  returnQuantity: number
+  damagedQuantity: number
+  lostQuantity: number
+}
+
 const ReturnForm = ({ transaction, onClose, onSuccess }: {
   transaction: Transaction
   onClose: () => void
@@ -768,7 +776,7 @@ const ReturnForm = ({ transaction, onClose, onSuccess }: {
   const { success, error, warning } = useNotifications()
   const [isLoading, setIsLoading] = useState(false)
   const [notes, setNotes] = useState('')
-  const [itemReturns, setItemReturns] = useState<any[]>(() => 
+  const [itemReturns, setItemReturns] = useState<ReturnItem[]>(() => 
     transaction.items?.map(item => ({
       transactionItemId: item.id,
       itemName: item.item?.name || 'Unknown Item',
