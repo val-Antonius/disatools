@@ -247,13 +247,20 @@ export interface MostBorrowedItem {
   categoryName: string;
 }
 
+export interface LowStockItem {
+  id: string;
+  name: string;
+  stock: number;
+  minStock: number;
+}
+
 export interface AnalyticsData {
   categoryDistribution: CategoryDistribution[];
   mostBorrowedItems: MostBorrowedItem[];
-  monthlyBorrowingTrend: {
+  monthlyActivityTrend: {
     month: string;
-    borrowCount: number;
-    returnCount: number;
+    toolsBorrowed: number;
+    materialsConsumed: number;
   }[];
 }
 
@@ -365,20 +372,24 @@ export interface DashboardData {
 
 // Analytics response types
 export interface AnalyticsResponse {
+  lowStockItems: LowStockItem[];
   categoryDistribution: CategoryDistribution[];
   mostBorrowedItems: MostBorrowedItem[];
-  monthlyBorrowingTrend: {
+  monthlyActivityTrend: {
     month: string;
-    borrowCount: number;
-    returnCount: number;
+    toolsBorrowed: number;
+    materialsConsumed: number;
   }[];
   summary: {
     totalItems: number;
+    totalTools: number;
+    totalMaterials: number;
     totalBorrowings: number;
     activeBorrowings: number;
     overdueBorrowings: number;
     damagedItems: number;
     damagedReturns: number;
+    materialsUsedLastMonth: number;
     avgBorrowingDuration: number;
     returnRate: number;
   };

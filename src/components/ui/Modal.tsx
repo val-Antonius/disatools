@@ -10,6 +10,7 @@ interface ModalProps {
   children: React.ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl'
   showCloseButton?: boolean
+  overlayClassName?: string
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -18,7 +19,8 @@ const Modal: React.FC<ModalProps> = ({
   title,
   children,
   size = 'md',
-  showCloseButton = true
+  showCloseButton = true,
+  overlayClassName
 }) => {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -51,7 +53,10 @@ const Modal: React.FC<ModalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto animate-fade-in">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-gray-900 bg-opacity-20 backdrop-blur-sm transition-opacity duration-300"
+        className={cn(
+          'fixed inset-0 bg-gray-900 bg-opacity-20 backdrop-blur-sm transition-opacity duration-300',
+          overlayClassName
+        )}
         onClick={onClose}
       />
 

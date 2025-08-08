@@ -10,7 +10,7 @@ import { Plus, Search, Grid3X3, List, Eye, Edit2, Trash2, Package, AlertTriangle
 import ImageUpload from '@/components/ui/ImageUpload'
 import AutocompleteInput from '@/components/ui/AutocompleteInput'
 import ConfirmationModal from '@/components/ui/ConfirmationModal'
-import { ItemStatus, Item, Category, Location, ItemFormData, BorrowingFormData, CategoryType, TransactionFormData, MaterialRequestFormData, ToolBorrowingFormData, TransactionType, ItemCondition } from '@/types'
+import { ItemStatus, Item, Category, Location, ItemFormData, CategoryType, TransactionFormData, MaterialRequestFormData, ToolBorrowingFormData, TransactionType, ItemCondition } from '@/types'
 import { useNotifications } from '@/components/ui/NotificationProvider'
 
 // Enhanced status system with visual indicators
@@ -577,7 +577,7 @@ const InventoryPage: React.FC = () => {
   // New states for enhanced functionality
   const [activeTab, setActiveTab] = useState<InventoryTab>('materials')
   const [viewMode, setViewMode] = useState<ViewMode>('table')
-  const [selectedItems, setSelectedItems] = new Set<string>()
+  const [selectedItems, setSelectedItems] = useState(new Set<string>())
   const [sidebar, setSidebar] = useState<SidebarState>({ isOpen: false, panel: 'none' })
   const [_editingField, _setEditingField] = useState<{ itemId: string, field: string } | null>(null)
   const [_hoveredItem, _setHoveredItem] = useState<string | null>(null)
@@ -610,13 +610,13 @@ const InventoryPage: React.FC = () => {
     locationId: ''
   })
 
-  const [_setBorrowingData, setBorrowingData] = useState<BorrowingFormData>({
-    borrowerName: '',
-    purpose: '',
-    expectedReturnDate: '',
-    notes: '',
-    items: []
-  })
+  // const [_setBorrowingData, setBorrowingData] = useState<BorrowingFormData>({
+  //   borrowerName: '',
+  //   purpose: '',
+  //   expectedReturnDate: '',
+  //   notes: '',
+  //   items: []
+  // })
 
   // New form data for unified transaction system
   const [materialRequestData, setMaterialRequestData] = useState<MaterialRequestFormData>({
@@ -647,51 +647,71 @@ const InventoryPage: React.FC = () => {
   // Transaction form tab state
   const [transactionTab, setTransactionTab] = useState<'materials' | 'tools'>('materials')
 
+  const fetchItems = useCallback(async () => {
+    try {
+      const response = await fetch('/api/tools-materials')
+      if (response.ok) {
+        const data = await response.json()
+        setItems((data.data as Item[]) || [])
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error)
+    } finally {
+      setIsLoadingData(false)
+    }
+  }, [])
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await fetch('/api/categories')
+      if (response.ok) {
+        const data = await response.json()
+        const categoriesData = (data.data as Category[]) || []
+        setCategories(categoriesData)
+
+        // Set default category to Materials if form is empty
+        if (!formData.categoryId && categoriesData.length > 0) {
+          const materialsCategory = categoriesData.find(cat => cat.name === 'Materials')
+          if (materialsCategory) {
+            setFormData(prev => ({ ...prev, categoryId: materialsCategory.id }))
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }, [formData.categoryId])
+
+  const fetchLocations = useCallback(async () => {
+    try {
+      const response = await fetch('/api/locations')
+      if (response.ok) {
+        const data = await response.json()
+        const locationsData = (data.data as Location[]) || []
+        setLocations(locationsData)
+
+        // Set default location to Gudang if form is empty
+        if (!formData.locationId && locationsData.length > 0) {
+          const gudangLocation = locationsData.find(loc => loc.name === 'Gudang')
+          if (gudangLocation) {
+            setFormData(prev => ({ ...prev, locationId: gudangLocation.id }))
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error)
+    }
+  }, [formData.locationId])
+
   useEffect(() => {
     fetchItems()
     fetchCategories()
     fetchLocations()
-  }, [fetchCategories, fetchLocations])
+  }, [fetchItems, fetchCategories, fetchLocations])
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape to close sidebar
-      if (e.key === 'Escape' && sidebar.isOpen) {
-        closeSidebar()
-      }
 
-      // Ctrl/Cmd + A to select all
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !sidebar.isOpen) {
-        e.preventDefault()
-        handleSelectAll(true)
-      }
 
-      // Ctrl/Cmd + D to deselect all
-      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedItems.size > 0) {
-        e.preventDefault()
-        setSelectedItems(new Set())
-      }
 
-      // Ctrl/Cmd + N to add new item
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !sidebar.isOpen) {
-        e.preventDefault()
-        openSidebar('add-item')
-      }
-
-      // Ctrl/Cmd + F to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault()
-        const searchInput = document.querySelector('input[placeholder*="Cari"]') as HTMLInputElement
-        if (searchInput) {
-          searchInput.focus()
-        }
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [sidebar.isOpen, selectedItems.size, handleSelectAll, openSidebar, setSelectedItems])
 
   // Form Submission Handlers
   const handleCreateItem = async (e: React.FormEvent) => {
@@ -742,26 +762,26 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const _handleSubmitBorrowing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      // This assumes your API can handle multiple borrowings in one call
-      const response = await fetch('/api/borrowings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(borrowingData),
-      });
-      if (!response.ok) throw new Error('Gagal meminjam item');
-      await fetchItems();
-      closeSidebar();
-    } catch (err) {
-      console.error('Error submitting borrowing:', err);
-      error('Gagal meminjam item', err instanceof Error ? err.message : undefined);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // const _handleSubmitBorrowing = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setIsLoading(true);
+  //   try {
+  //     // This assumes your API can handle multiple borrowings in one call
+  //     const response = await fetch('/api/borrowings', {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify(borrowingData),
+  //     });
+  //     if (!response.ok) throw new Error('Gagal meminjam item');
+  //     await fetchItems();
+  //     closeSidebar();
+  //   } catch (err) {
+  //     console.error('Error submitting borrowing:', err);
+  //     error('Gagal meminjam item', err instanceof Error ? err.message : undefined);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   // New handlers for unified transaction system
   const handleSubmitMaterialRequest = async (e: React.FormEvent) => {
@@ -933,63 +953,7 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const fetchItems = async () => {
-    try {
-      const response = await fetch('/api/tools-materials')
-      if (response.ok) {
-        const data = await response.json()
-        setItems((data.data as Item[]) || [])
-      }
-    } catch (error) {
-      console.error('Error fetching items:', error)
-    } finally {
-      setIsLoadingData(false)
-    }
-  }
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      const response = await fetch('/api/categories')
-      if (response.ok) {
-        const data = await response.json()
-        const categoriesData = (data.data as Category[]) || []
-        setCategories(categoriesData)
-
-        // Set default category to Materials if form is empty
-        if (!formData.categoryId && categoriesData.length > 0) {
-          const materialsCategory = categoriesData.find(cat => cat.name === 'Materials')
-          if (materialsCategory) {
-            setFormData(prev => ({ ...prev, categoryId: materialsCategory.id }))
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error)
-    }
-  }, [formData.categoryId])
-
-  const fetchLocations = useCallback(async () => {
-    try {
-      const response = await fetch('/api/locations')
-      if (response.ok) {
-        const data = await response.json()
-        const locationsData = (data.data as Location[]) || []
-        setLocations(locationsData)
-
-        // Set default location to Gudang if form is empty
-        if (!formData.locationId && locationsData.length > 0) {
-          const gudangLocation = locationsData.find(loc => loc.name === 'Gudang')
-          if (gudangLocation) {
-            setFormData(prev => ({ ...prev, locationId: gudangLocation.id }))
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching locations:', error)
-    }
-  }, [formData.locationId])
-
-  // Filter items based on active tab and search
+ // Filter items based on active tab and search
   const filteredItems = items.filter(item => {
     // Filter by tab (materials vs tools)
     const tabFilter = activeTab === 'materials'
@@ -1102,7 +1066,7 @@ const InventoryPage: React.FC = () => {
     setSidebar({ isOpen: true, panel, data })
   }, [categories, locations])
 
-  const closeSidebar = () => {
+  const closeSidebar = useCallback(() => {
     setSidebar({ isOpen: false, panel: 'none', data: undefined })
     // Form data will be reset when opening add-item form with defaults
     setMaterialRequestData({
@@ -1118,7 +1082,57 @@ const InventoryPage: React.FC = () => {
       notes: '',
       items: []
     })
-  }
+    setUnifiedTransactionData({
+      items: [],
+      type: TransactionType.BORROWING,
+      requesterName: '',
+      purpose: '',
+      expectedReturnDate: '',
+      notes: ''
+    })
+  }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape to close sidebar
+      if (e.key === 'Escape' && sidebar.isOpen) {
+        closeSidebar()
+      }
+
+      // Ctrl/Cmd + A to select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !sidebar.isOpen) {
+        e.preventDefault()
+        handleSelectAll(true)
+      }
+
+      // Ctrl/Cmd + D to deselect all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedItems.size > 0) {
+        e.preventDefault()
+        setSelectedItems(new Set())
+      }
+
+      // Ctrl/Cmd + N to add new item
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !sidebar.isOpen) {
+        e.preventDefault()
+        openSidebar('add-item')
+      }
+
+      // Ctrl/Cmd + F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        const searchInput = document.querySelector('input[placeholder*="Cari"]') as HTMLInputElement
+        if (searchInput) {
+          searchInput.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [sidebar.isOpen, selectedItems.size, handleSelectAll, openSidebar, setSelectedItems, closeSidebar])
+
+
 
   // Utility function to get item statistics
   const getItemStats = () => {
@@ -1448,4 +1462,259 @@ const InventoryPage: React.FC = () => {
     <AppLayout>
       <div className="flex h-screen overflow-hidden">
         {/* Main Content */}
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebar.isOpen ? 'mr-96' : ''}`
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebar.isOpen ? 'mr-96' : ''}`}>
+          {/* Header */}
+          <div className="flex justify-between items-center px-6 py-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Tools & Materials</h1>
+              <p className="text-gray-600 text-sm">
+                Kelola materials (sekali pakai) dan tools (pinjam) dengan sistem terintegrasi
+              </p>
+            </div>
+          </div>
+
+          {/* Statistics Bar */}
+          <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-white">
+            <div className="flex items-center space-x-6">
+              {(() => {
+                const stats = getItemStats();
+                return (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Total: <span className="font-semibold text-gray-900">{stats.total}</span></span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Tersedia: <span className="font-semibold text-green-600">{stats.available}</span></span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      <span className="text-sm text-gray-600">{activeTab === 'materials' ? 'Terpakai' : 'Dipinjam'}: <span className="font-semibold text-yellow-600">{stats.loaned}</span></span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Stok Rendah: <span className="font-semibold text-orange-600">{stats.lowStock}</span></span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Habis: <span className="font-semibold text-red-600">{stats.outOfStock}</span></span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Content Area with integrated tabs and search */}
+          <Card className="mx-6 mt-6 mb-6 flex-1 flex flex-col overflow-hidden">
+            {/* Tab Navigation with Search */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => handleTabSwitch('materials')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'materials'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Package className="h-4 w-4 mr-2 inline" />
+                  Materials ({materialItems.length})
+                </button>
+                <button
+                  onClick={() => handleTabSwitch('tools')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'tools'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Package className="h-4 w-4 mr-2 inline" />
+                  Tools ({toolItems.length})
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="w-80">
+                  <Input
+                    placeholder="Cari barang, kategori, atau lokasi..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    leftIcon={<Search className="h-4 w-4" />}
+                  />
+                </div>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant={viewMode === 'table' ? 'primary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('table')}
+                    className="px-3 py-2"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'card' ? 'primary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('card')}
+                    className="px-3 py-2"
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  onClick={() => openSidebar('add-item')}
+                  className="flex items-center space-x-2"
+                  title="Tambah Item Baru (Ctrl+N)"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Tambah Item</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Table Content */}
+            <div className="flex-1 overflow-auto p-6">
+              {isLoadingData ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Memuat data...</span>
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="text-center py-12">
+                  <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Belum ada barang</h3>
+                  <p className="text-gray-600 mb-4">Mulai dengan menambahkan barang pertama</p>
+                  <Button onClick={() => openSidebar('add-item')} className="flex items-center space-x-2">
+                    <Plus className="h-4 w-4" />
+                    <span>Tambah Barang</span>
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {viewMode === 'table' ? (
+                    <TableView
+                      items={filteredItems}
+                      selectedItems={selectedItems}
+                      onSelectAll={handleSelectAll}
+                      onSelectItem={handleSelectItem}
+                      onOpenDetail={(item) => openSidebar('item-detail', item)}
+                    />
+                  ) : (
+                    <CardView
+                      items={filteredItems}
+                      selectedItems={selectedItems}
+                      onSelectItem={handleSelectItem}
+                      onOpenDetail={(item) => openSidebar('item-detail', item)}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </Card>
+
+          {/* Floating Action Panel */}
+          {selectedItems.size > 0 && (
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 floating-panel">
+              <Card className="glass shadow-2xl border-gray-300 selection-ring">
+                <CardContent className="px-6 py-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="relative">
+                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                          <span className="text-sm font-bold text-white">{selectedItems.size}</span>
+                        </div>
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-gray-800">
+                          {selectedItems.size} item terpilih
+                        </span>
+                        <div className="text-xs text-gray-500">
+                          {getSmartActions().length} aksi tersedia
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      {getSmartActions().map((action, index) => (
+                        <Button
+                          key={index}
+                          variant={action.variant as "primary" | "secondary" | "outline" | "ghost"}
+                          size="sm"
+                          onClick={() => handleAction(action.action)}
+                          className="shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                        >
+                          {action.action === 'loan' && <User className="h-4 w-4 mr-1" />}
+                          {action.action === 'multi-loan' && <User className="h-4 w-4 mr-1" />}
+                          {action.action === 'return' && <Check className="h-4 w-4 mr-1" />}
+                          {action.action === 'maintenance' && <AlertTriangle className="h-4 w-4 mr-1" />}
+                          {action.action === 'bulk-edit' && <Edit2 className="h-4 w-4 mr-1" />}
+                          {action.action === 'delete' && <Trash2 className="h-4 w-4 mr-1" />}
+                          {action.label}
+                        </Button>
+                      ))}
+
+                      <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedItems(new Set())}
+                        className="p-2 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        title="Batal pilih semua"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* Contextual Sidebar */}
+        <ContextualSidebar
+          sidebar={sidebar}
+          onClose={closeSidebar}
+          openSidebar={openSidebar}
+          formData={formData}
+          setFormData={setFormData}
+          categories={categories}
+          locations={locations}
+          handleCreateItem={handleCreateItem}
+          handleEditItem={handleEditItem}
+          materialRequestData={materialRequestData}
+          setMaterialRequestData={setMaterialRequestData}
+          handleSubmitMaterialRequest={handleSubmitMaterialRequest}
+          toolBorrowingData={toolBorrowingData}
+          setToolBorrowingData={setToolBorrowingData}
+          handleSubmitToolBorrowing={handleSubmitToolBorrowing}
+          unifiedTransactionData={unifiedTransactionData}
+          setUnifiedTransactionData={setUnifiedTransactionData}
+          handleUnifiedTransactionSubmit={handleUnifiedTransactionSubmit}
+          transactionTab={transactionTab}
+          setTransactionTab={setTransactionTab}
+          handleDeleteItem={handleDeleteItem}
+          isLoading={isLoading}
+        />
+      </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmationModal.isOpen}
+        onClose={closeConfirmationModal}
+        onConfirm={handleConfirmAction}
+        title={confirmationModal.title}
+        message={confirmationModal.message}
+        variant={confirmationModal.variant}
+        confirmText="Konfirmasi"
+        cancelText="Batal"
+        isLoading={isLoading}
+      />
+    </AppLayout>
+  );
+};
+
+export default InventoryPage;

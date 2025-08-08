@@ -86,6 +86,48 @@ interface ReportData {
 
 type ReportType = 'all-activities' | 'tools' | 'materials' | 'conditions-damage-utilization' | 'borrowings' | 'activities'
 
+interface ReportTypeOptionProps {
+  type: ReportType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  currentType: ReportType;
+  onClick: (type: ReportType) => void;
+}
+
+const ReportTypeOption: React.FC<ReportTypeOptionProps> = ({ type, label, description, icon, currentType, onClick }) => {
+  const colorClasses = {
+    'all-activities': 'border-blue-500 bg-blue-50 text-blue-800',
+    'tools': 'border-green-500 bg-green-50 text-green-800',
+    'materials': 'border-purple-500 bg-purple-50 text-purple-800',
+    'conditions-damage-utilization': 'border-orange-500 bg-orange-50 text-orange-800',
+    'borrowings': 'border-yellow-500 bg-yellow-50 text-yellow-800',
+    'activities': 'border-cyan-500 bg-cyan-50 text-cyan-800',
+  };
+
+  const selectedClass = colorClasses[type] || 'border-gray-200';
+
+  return (
+    <label
+      className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+        currentType === type ? selectedClass : 'border-gray-200 hover:bg-gray-50'
+      }`}
+    >
+      <input
+        type="radio"
+        name="reportType"
+        value={type}
+        checked={currentType === type}
+        onChange={() => onClick(type)}
+        className="sr-only"
+      />
+      {icon}
+      <span className="font-medium text-gray-900 text-center">{label}</span>
+      <p className="text-xs text-gray-600 text-center mt-1">{description}</p>
+    </label>
+  );
+};
+
 const ReportsContent: React.FC = () => {
   const searchParams = useSearchParams()
   const [reportType, setReportType] = useState<ReportType>('all-activities')
@@ -99,104 +141,15 @@ const ReportsContent: React.FC = () => {
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   // Data states
-  const [allActivitiesData, setAllActivitiesData] = useState<Activity[]>([])
-  const [toolsData, setToolsData] = useState<ReportData[]>([])
-  const [materialsData, setMaterialsData] = useState<ReportData[]>([])
-  const [conditionsData, setConditionsData] = useState<ReportData[]>([])
   const [previewData, setPreviewData] = useState<ReportData[]>([])
 
-  // Pre-fill filters from URL params (from Calendar integration)
   useEffect(() => {
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
-    const reportTypeParam = searchParams.get('reportType')
-
     if (dateFrom || dateTo) {
-      setFilters(prev => ({
-        ...prev,
-        dateFrom: dateFrom || '',
-        dateTo: dateTo || ''
-      }))
-    }
-
-    // Set report type based on calendar selection
-    if (reportTypeParam) {
-      switch (reportTypeParam) {
-        case 'tools':
-          setReportType('tools')
-          break
-        case 'materials':
-          setReportType('materials')
-          break
-        case 'conditions':
-          setReportType('conditions-damage-utilization')
-          break
-        default:
-          setReportType('all-activities')
-      }
+      setFilters(prev => ({ ...prev, dateFrom: dateFrom || '', dateTo: dateTo || '' }))
     }
   }, [searchParams])
-
-  // Fetch data based on report type
-  useEffect(() => {
-    const fetchReportData = async () => {
-      setIsLoading(true)
-      try {
-      const queryParams = new URLSearchParams()
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value)
-      })
-
-      let endpoint = ''
-      switch (reportType) {
-        case 'all-activities':
-          endpoint = `/api/transactions?${queryParams}`
-          break
-        case 'tools':
-          endpoint = `/api/transactions?type=BORROWING&${queryParams}`
-          break
-        case 'materials':
-          endpoint = `/api/transactions?type=REQUEST&${queryParams}`
-          break
-        case 'conditions-damage-utilization':
-          endpoint = `/api/reports/comprehensive?${queryParams}`
-          break
-        default:
-          return
-      }
-
-      const response = await fetch(endpoint)
-      if (response.ok) {
-        const result = await response.json()
-        const data = result.data || result
-
-        switch (reportType) {
-          case 'all-activities':
-            setAllActivitiesData(data)
-            setPreviewData(data.slice(0, 10)) // Show first 10 for preview
-            break
-          case 'tools':
-            setToolsData(data)
-            setPreviewData(data.slice(0, 10))
-            break
-          case 'materials':
-            setMaterialsData(data)
-            setPreviewData(data.slice(0, 10))
-            break
-          case 'conditions-damage-utilization':
-            setConditionsData(data)
-            setPreviewData(data.slice(0, 10))
-            break
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching report data:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-  fetchReportData()
-}, [reportType, filters])
 
   const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({ ...prev, [field]: value }))
@@ -209,92 +162,78 @@ const ReportsContent: React.FC = () => {
 
   const handleGenerateReport = async (format: 'pdf' | 'excel') => {
     setIsGenerating(true)
+    setIsLoading(true)
     setExportMessage(null)
+    setPreviewData([])
 
     try {
-      let result
+      const queryParams = new URLSearchParams({
+        type: reportType,
+        ...filters,
+      }).toString()
 
-      if (reportType === 'borrowings') {
-        const exportData = prepareBorrowingDataForExport(previewData.map((item: Record<string, unknown>) => ({
-          id: item.id as string,
-          borrowerName: item.borrowerName as string,
-          borrowDate: item.borrowDate as string,
-          returnDate: item.returnDate as string | null,
-          purpose: item.purpose as string,
-          status: item.status as string,
-          items: [{
-            item: {
-              name: item.itemName as string,
-              category: { name: item.category as string }
-            },
-            quantity: 1,
-            returnedQuantity: item.status === 'RETURNED' ? 1 : 0
-          }]
-        })))
+      const response = await fetch(`/api/reports?${queryParams}`)
+      const result = await response.json()
 
-        if (format === 'pdf') {
-          result = await exportToPDF(exportData, filters)
-        } else {
-          result = await exportToExcel(exportData, filters)
-        }
-      } else if (reportType === 'activities') {
-        const exportData = prepareActivityDataForExport(allActivitiesData.map((activity) => ({
-          ...activity,
-          createdAt: activity.createdAt.toString()
-        })))
-
-        if (format === 'pdf') {
-          result = await exportActivitiesToPDF(exportData, filters)
-        } else {
-          result = await exportActivitiesToExcel(exportData, filters)
-        }
-      } else {
-        // For enhanced reports, use proper export functions
-        let dataToExport: ReportData[] = []
-        switch (reportType) {
-          case 'tools':
-            dataToExport = toolsData
-            break
-          case 'materials':
-            dataToExport = materialsData
-            break
-          case 'conditions-damage-utilization':
-            dataToExport = conditionsData
-            break
-          default:
-            dataToExport = []
-        }
-
-        if (format === 'pdf') {
-          result = await exportEnhancedReportToPDF(dataToExport, reportType, filters)
-        } else {
-          result = await exportEnhancedReportToExcel(dataToExport, reportType, filters)
-        }
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to fetch data')
       }
 
-      if (result && result.success) {
-        setExportMessage({
-          type: 'success',
-          message: `Laporan ${reportType} berhasil diunduh: ${result.filename}`
-        })
-      } else {
-        throw new Error('Export failed')
+      if (result.data.length === 0) {
+        setExportMessage({ type: 'error', message: 'No data found for the selected criteria.' })
+        return
       }
-    } catch (error) {
+
+      setPreviewData(result.data)
+
+      let headers: string[] = []
+      let reportTitle = ''
+      let preparedData: any[] = []
+
+      switch (reportType) {
+        case 'all-activities':
+          reportTitle = 'All Activities Report'
+          headers = ['Date', 'User', 'Activity', 'Item', 'Category', 'Details']
+          preparedData = result.data.map(prepareActivityDataForExport)
+          break
+        case 'tools':
+          reportTitle = 'Tools Borrowing Report'
+          headers = ['Borrower', 'Item', 'Category', 'Borrow Date', 'Return Date', 'Status']
+          preparedData = result.data.map(prepareBorrowingDataForExport)
+          break
+        case 'materials':
+          reportTitle = 'Materials Usage Report'
+          headers = ['Requester', 'Item', 'Category', 'Request Date', 'Quantity', 'Status']
+          preparedData = result.data.map(prepareBorrowingDataForExport)
+          break
+        case 'conditions-damage-utilization':
+          reportTitle = 'Item Condition & Utilization Report'
+          headers = ['Item', 'Category', 'Condition', 'Damage Rate', 'Utilization Rate']
+          preparedData = result.data
+          break
+      }
+
+      const dateRange = `From ${filters.dateFrom || 'start'} to ${filters.dateTo || 'end'}`
+
+      if (format === 'pdf') {
+        exportEnhancedReportToPDF(preparedData, reportType, filters)
+      } else {
+        exportEnhancedReportToExcel(preparedData, reportType, filters)
+      }
+
+      setExportMessage({ type: 'success', message: `Successfully generated ${format.toUpperCase()} report.` })
+    } catch (error: any) {
       console.error('Error generating report:', error)
-      setExportMessage({
-        type: 'error',
-        message: `Gagal generate laporan ${format.toUpperCase()}`
-      })
+      setExportMessage({ type: 'error', message: error.message || 'Failed to generate report.' })
     } finally {
       setIsGenerating(false)
+      setIsLoading(false)
     }
   }
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="px-6 py-4">
           <h1 className="text-2xl font-bold text-gray-900">Reporting & Export</h1>
           <p className="text-gray-600 text-sm">
@@ -325,83 +264,42 @@ const ReportsContent: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* New Report Types */}
-              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'all-activities'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="all-activities"
-                  checked={reportType === 'all-activities'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
-                  className="sr-only"
-                />
-                <ActivityIcon className="h-8 w-8 text-blue-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Semua Aktivitas</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Semua transaksi tools & materials</p>
-              </label>
-
-              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'tools'
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="tools"
-                  checked={reportType === 'tools'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
-                  className="sr-only"
-                />
-                <Package className="h-8 w-8 text-green-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Tools</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Peminjaman & pengembalian tools</p>
-              </label>
-
-              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'materials'
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="materials"
-                  checked={reportType === 'materials'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
-                  className="sr-only"
-                />
-                <Package className="h-8 w-8 text-purple-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Materials</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Permintaan & konsumsi materials</p>
-              </label>
-
-              <label className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                reportType === 'conditions-damage-utilization'
-                  ? 'border-orange-500 bg-orange-50'
-                  : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <input
-                  type="radio"
-                  name="reportType"
-                  value="conditions-damage-utilization"
-                  checked={reportType === 'conditions-damage-utilization'}
-                  onChange={(e) => handleReportTypeChange(e.target.value as ReportType)}
-                  className="sr-only"
-                />
-                <BarChart3 className="h-8 w-8 text-orange-600 mb-2" />
-                <span className="font-medium text-gray-900 text-center">Kondisi & Utilisasi</span>
-                <p className="text-xs text-gray-600 text-center mt-1">Gabungan kondisi, kerusakan & utilisasi</p>
-              </label>
+              <ReportTypeOption
+                type="all-activities"
+                label="Semua Aktivitas"
+                description="Semua transaksi tools & materials"
+                icon={<ActivityIcon className="h-8 w-8 text-blue-600 mb-2" />}
+                currentType={reportType}
+                onClick={handleReportTypeChange}
+              />
+              <ReportTypeOption
+                type="tools"
+                label="Tools"
+                description="Peminjaman & pengembalian tools"
+                icon={<Package className="h-8 w-8 text-green-600 mb-2" />}
+                currentType={reportType}
+                onClick={handleReportTypeChange}
+              />
+              <ReportTypeOption
+                type="materials"
+                label="Materials"
+                description="Permintaan & konsumsi materials"
+                icon={<Package className="h-8 w-8 text-purple-600 mb-2" />}
+                currentType={reportType}
+                onClick={handleReportTypeChange}
+              />
+              <ReportTypeOption
+                type="conditions-damage-utilization"
+                label="Kondisi & Utilisasi"
+                description="Gabungan kondisi, kerusakan & utilisasi"
+                icon={<BarChart3 className="h-8 w-8 text-orange-600 mb-2" />}
+                currentType={reportType}
+                onClick={handleReportTypeChange}
+              />
             </div>
           </CardContent>
         </Card>
 
-        {/* Generate Reports */}
         <Card className="glass">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -447,7 +345,6 @@ const ReportsContent: React.FC = () => {
                 <FileText className="h-4 w-4" />
                 <span>Download PDF</span>
               </Button>
-
               <Button
                 onClick={() => handleGenerateReport('excel')}
                 loading={isGenerating}
@@ -459,7 +356,6 @@ const ReportsContent: React.FC = () => {
                 <span>Download Excel</span>
               </Button>
             </div>
-
             {exportMessage && (
               <div className={`mt-4 p-3 rounded-lg ${
                 exportMessage.type === 'success'
@@ -467,57 +363,22 @@ const ReportsContent: React.FC = () => {
                   : 'bg-red-50 border border-red-200 text-red-800'
               }`}>
                 <div className="flex items-center space-x-2">
-                  {exportMessage.type === 'success' ? (
-                    <CheckCircle className="h-4 w-4" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4" />
-                  )}
+                  {exportMessage.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                   <span className="text-sm font-medium">{exportMessage.message}</span>
                 </div>
               </div>
             )}
-
-            {/* Data Preview */}
-            {!isLoading && previewData.length > 0 && (
+            {previewData.length > 0 && (
               <div className="mt-6">
-                <h4 className="font-medium text-gray-900 mb-4">Preview Data</h4>
-
-                {/* Summary Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4 p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <span className="text-gray-600">Total Records:</span>
-                    <span className="ml-2 font-medium">
-                      {reportType === 'all-activities' ? allActivitiesData.length :
-                       reportType === 'tools' ? toolsData.length :
-                       reportType === 'materials' ? materialsData.length :
-                       reportType === 'conditions-damage-utilization' ? conditionsData.length : 0}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Report Type:</span>
-                    <span className="ml-2 font-medium capitalize">{reportType.replace('-', ' ')}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Date Range:</span>
-                    <span className="ml-2 font-medium">
-                      {filters.dateFrom || 'All'} - {filters.dateTo || 'All'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Preview:</span>
-                    <span className="ml-2 font-medium">First {previewData.length} records</span>
-                  </div>
-                </div>
-
-                {/* Preview Table */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto max-h-96">
+                <h4 className="text-md font-semibold text-gray-800">Data Preview</h4>
+                <div className="mt-2 border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
                           {reportType === 'all-activities' || reportType === 'tools' || reportType === 'materials' ? (
                             <>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tujuan</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -538,7 +399,7 @@ const ReportsContent: React.FC = () => {
                           <tr key={index} className="hover:bg-gray-50">
                             {reportType === 'all-activities' || reportType === 'tools' || reportType === 'materials' ? (
                               <>
-                                <td className="px-4 py-3 text-sm text-gray-900">{item.requesterName || 'N/A'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900">{item.requesterName || item.borrowerName || 'N/A'}</td>
                                 <td className="px-4 py-3 text-sm text-gray-500">{item.purpose || 'N/A'}</td>
                                 <td className="px-4 py-3 text-sm text-gray-500">
                                   {item.transactionDate ? new Date(item.transactionDate).toLocaleDateString('id-ID') : 'N/A'}

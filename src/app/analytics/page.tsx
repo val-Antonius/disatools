@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { BarChart3, PieChart, TrendingUp, Package, Activity, Wrench, AlertTriangle, Clock } from 'lucide-react'
-import { AnalyticsResponse, CategoryDistribution, MostBorrowedItem } from '@/types'
+import { AnalyticsResponse, CategoryDistribution, MostBorrowedItem, LowStockItem } from '@/types'
 
 // KPI Slider Component
 const KPISlider: React.FC<{
@@ -213,8 +213,8 @@ const MostBorrowedChart: React.FC<{ data: MostBorrowedItem[] }> = ({ data }) => 
 
 interface MonthlyTrendData {
   month: string;
-  borrowCount: number;
-  returnCount: number;
+  toolsBorrowed: number;
+  materialsConsumed: number;
 }
 
 const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
@@ -228,7 +228,7 @@ const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
   }
 
   const maxValue = Math.max(
-    ...data.map(item => Math.max(item.borrowCount, item.returnCount))
+    ...data.map(item => Math.max(item.toolsBorrowed, item.materialsConsumed))
   )
 
   return (
@@ -236,11 +236,11 @@ const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
       <div className="flex justify-center space-x-6">
         <div className="flex items-center space-x-2">
           <div className="w-4 h-4 bg-blue-500 rounded"></div>
-          <span className="text-sm text-gray-600">Peminjaman</span>
+          <span className="text-sm text-gray-600">Alat Dipinjam</span>
         </div>
         <div className="flex items-center space-x-2">
           <div className="w-4 h-4 bg-green-500 rounded"></div>
-          <span className="text-sm text-gray-600">Pengembalian</span>
+          <span className="text-sm text-gray-600">Material Dipakai</span>
         </div>
       </div>
 
@@ -250,11 +250,11 @@ const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
             <div className="flex items-end space-x-1 h-40">
               <div
                 className="bg-blue-500 rounded-t transition-all duration-500 w-6"
-                style={{ height: `${(item.borrowCount / maxValue) * 100}%` }}
+                style={{ height: `${(item.toolsBorrowed / maxValue) * 100}%` }}
               />
               <div
                 className="bg-green-500 rounded-t transition-all duration-500 w-6"
-                style={{ height: `${(item.returnCount / maxValue) * 100}%` }}
+                style={{ height: `${(item.materialsConsumed / maxValue) * 100}%` }}
               />
             </div>
             <div className="text-xs text-gray-600 font-medium">
@@ -270,16 +270,12 @@ const TrendChart: React.FC<{ data: MonthlyTrendData[] }> = ({ data }) => {
 const AnalyticsPage: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [materialsUsedLastMonth, setMaterialsUsedLastMonth] = useState(0)
+  const [monthlyActivityTrend, setMonthlyActivityTrend] = useState<MonthlyTrendData[]>([])
+  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
 
   useEffect(() => {
     fetchAnalyticsData()
   }, [])
-
-  useEffect(() => {
-    // TODO: Fetch materials used in the last 30 days from backend when available
-    setMaterialsUsedLastMonth(0)
-  }, [analyticsData])
 
   const fetchAnalyticsData = async () => {
     setIsLoading(true)
@@ -288,6 +284,8 @@ const AnalyticsPage: React.FC = () => {
       if (response.ok) {
         const data = await response.json()
         setAnalyticsData(data.data as AnalyticsResponse)
+        setMonthlyActivityTrend(data.monthlyActivityTrend || [])
+        setLowStockItems(data.lowStockItems || [])
       }
     } catch (error) {
       console.error('Error fetching analytics data:', error)
@@ -309,7 +307,6 @@ const AnalyticsPage: React.FC = () => {
 
   const categoryDistribution = analyticsData?.categoryDistribution || []
   const mostBorrowedItems = analyticsData?.mostBorrowedItems || []
-  const monthlyTrend = analyticsData?.monthlyBorrowingTrend || []
   const summary = analyticsData?.summary || {
     totalItems: 0,
     totalTools: 0,
@@ -317,7 +314,8 @@ const AnalyticsPage: React.FC = () => {
     totalBorrowings: 0,
     activeBorrowings: 0,
     damagedItems: 0,
-    damagedReturns: 0
+    damagedReturns: 0,
+    materialsUsedLastMonth: 0
   }
 
   return (
@@ -339,7 +337,7 @@ const AnalyticsPage: React.FC = () => {
           activeBorrowings={summary.activeBorrowings}
           damagedItems={summary.damagedItems}
           damagedReturns={summary.damagedReturns}
-          materialsUsedLastMonth={materialsUsedLastMonth} // <-- pass prop
+          materialsUsedLastMonth={summary.materialsUsedLastMonth}
         />
 
         {/* Charts */}
@@ -377,47 +375,52 @@ const AnalyticsPage: React.FC = () => {
           </Card>
         </div>
 
-        {/* Monthly Trend */}
+        {/* Monthly Activity Trend */}
         <Card className="glass">
           <CardHeader>
             <h3 className="text-lg font-semibold text-gray-900 flex items-center">
               <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
-              Trend Peminjaman Bulanan
+              Trend Aktivitas Bulanan
             </h3>
             <p className="text-sm text-gray-600">
-              Perbandingan peminjaman dan pengembalian per bulan
+              Perbandingan peminjaman alat dan pemakaian material per bulan
             </p>
           </CardHeader>
           <CardContent>
-            <TrendChart data={monthlyTrend} />
+            <TrendChart data={monthlyActivityTrend} />
           </CardContent>
         </Card>
 
-        {/* Dynamic Insights */}
-        {analyticsData?.insights && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {analyticsData.insights.map((insight, index: number) => (
-              <Card key={index} className={`glass border-l-4 ${
-                index === 0 ? 'border-l-blue-500' :
-                index === 1 ? 'border-l-green-500' : 'border-l-purple-500'
-              }`}>
-                <CardContent className="p-6">
-                  <h4 className="font-semibold text-gray-900 mb-2">{insight.title}</h4>
-                  <p className="text-sm text-gray-600">{insight.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Default insights when no data */}
-        {(!analyticsData?.insights || analyticsData.insights.length === 0) && (
-          <div className="text-center py-12">
-            <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Belum ada insight</h3>
-            <p className="text-gray-600">Data insight akan muncul setelah ada aktivitas inventaris</p>
-          </div>
-        )}
+        {/* Low Stock Items */}
+        <Card className="glass">
+          <CardHeader>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <AlertTriangle className="h-5 w-5 mr-2 text-red-600" />
+              Stok Segera Habis
+            </h3>
+            <p className="text-sm text-gray-600">
+              Barang yang stoknya di bawah batas minimum
+            </p>
+          </CardHeader>
+          <CardContent>
+            {lowStockItems.length > 0 ? (
+              <ul className="divide-y divide-gray-200">
+                {lowStockItems.map(item => (
+                  <li key={item.id} className="py-3 flex justify-between items-center">
+                    <span className="font-medium text-gray-800">{item.name}</span>
+                    <span className="text-sm text-red-600">
+                      Sisa: {item.stock} (Min: {item.minStock})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-gray-600">Stok semua barang aman.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   )

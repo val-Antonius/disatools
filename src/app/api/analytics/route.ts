@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { TransactionStatus, TransactionType } from '@/types'
+import { CategoryType } from '@prisma/client'
 
 // GET /api/analytics - Get analytics data
 export async function GET(_request: NextRequest) {
@@ -16,7 +18,7 @@ export async function GET(_request: NextRequest) {
       }
     })
 
-    const totalItems = categoryDistribution.reduce((sum: number, cat) => sum + cat._count.items, 0)
+    const totalItems = categoryDistribution.reduce((sum, cat) => sum + cat._count.items, 0)
 
     const categoryData = categoryDistribution.map(category => ({
       categoryName: category.name,
@@ -26,85 +28,86 @@ export async function GET(_request: NextRequest) {
 
     // Get most borrowed items
     const mostBorrowedItems = await prisma.item.findMany({
-      include: {
-        category: true,
-        _count: {
-          select: { borrowingItems: true }
+      where: {
+        transactionItems: {
+          some: {
+            transaction: {
+              type: TransactionType.BORROWING
+            }
+          }
         }
       },
-      orderBy: {
-        borrowingItems: { _count: 'desc' }
+      include: {
+        category: true,
+        transactionItems: {
+          where: {
+            transaction: {
+              type: TransactionType.BORROWING
+            }
+          },
+          select: {
+            quantity: true
+          }
+        }
       },
       take: 5
     })
 
     const borrowedItemsData = mostBorrowedItems.map(item => ({
       itemName: item.name,
-      borrowCount: item._count.borrowingItems,
+      borrowCount: item.transactionItems.reduce((sum: number, t: { quantity: number }) => sum + t.quantity, 0),
       categoryName: item.category.name
-    }))
+    })).sort((a, b) => b.borrowCount - a.borrowCount)
 
-    // Get monthly borrowing trend (last 6 months)
+    // Get monthly activity trend (last 6 months)
     const sixMonthsAgo = new Date()
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
-    const monthlyBorrowings = await prisma.borrowing.groupBy({
-      by: ['borrowDate'],
+    const monthlyTransactions = await prisma.transaction.findMany({
       where: {
-        borrowDate: { gte: sixMonthsAgo }
-      },
-      _count: { id: true }
-    })
-
-    const monthlyReturns = await prisma.borrowing.groupBy({
-      by: ['returnDate'],
-      where: {
-        returnDate: {
-          gte: sixMonthsAgo,
-          not: null
+        createdAt: { gte: sixMonthsAgo },
+        type: {
+          in: [TransactionType.BORROWING, TransactionType.REQUEST]
         }
       },
-      _count: { id: true }
+      select: {
+        createdAt: true,
+        type: true
+      }
     })
 
     // Group by month
-    const monthlyData: { [key: string]: { borrowCount: number; returnCount: number } } = {}
+    const monthlyData: { [key: string]: { toolsBorrowed: number; materialsConsumed: number } } = {}
 
     // Initialize last 6 months
     for (let i = 5; i >= 0; i--) {
       const date = new Date()
       date.setMonth(date.getMonth() - i)
       const monthKey = date.toISOString().slice(0, 7) // YYYY-MM format
-      monthlyData[monthKey] = { borrowCount: 0, returnCount: 0 }
+      monthlyData[monthKey] = { toolsBorrowed: 0, materialsConsumed: 0 }
     }
 
-    // Count borrowings by month
-    monthlyBorrowings.forEach(item => {
-      const monthKey = item.borrowDate.toISOString().slice(0, 7)
+    // Count transactions by month and type
+    monthlyTransactions.forEach(transaction => {
+      const monthKey = transaction.createdAt.toISOString().slice(0, 7)
       if (monthlyData[monthKey]) {
-        monthlyData[monthKey].borrowCount += item._count.id
-      }
-    })
-
-    // Count returns by month
-    monthlyReturns.forEach(item => {
-      if (item.returnDate) {
-        const monthKey = item.returnDate.toISOString().slice(0, 7)
-        if (monthlyData[monthKey]) {
-          monthlyData[monthKey].returnCount += item._count.id
+        if (transaction.type === TransactionType.BORROWING) {
+          monthlyData[monthKey].toolsBorrowed += 1
+        } else if (transaction.type === TransactionType.REQUEST) {
+          monthlyData[monthKey].materialsConsumed += 1
         }
       }
     })
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-    const monthlyTrendData = Object.entries(monthlyData).map(([monthKey, data]) => {
+    const monthlyActivityTrendData = Object.entries(monthlyData).map(([monthKey, data]) => {
       const [_year, month] = monthKey.split('-')
       const monthName = monthNames[parseInt(month) - 1]
       return {
         month: monthName,
-        borrowCount: data.borrowCount,
-        returnCount: data.returnCount
+        toolsBorrowed: data.toolsBorrowed,
+        materialsConsumed: data.materialsConsumed
       }
     })
 
@@ -114,37 +117,64 @@ export async function GET(_request: NextRequest) {
       activeBorrowings,
       overdueBorrowings,
       damagedItems,
-      damagedReturns
+      damagedReturnsResult,
+      materialsUsedLastMonth,
+      lowStockItems
     ] = await Promise.all([
-      prisma.borrowing.count(),
-      prisma.borrowing.count({ where: { status: 'ACTIVE' } }),
-      prisma.borrowing.count({
+      prisma.transaction.count({ where: { type: TransactionType.BORROWING } }),
+      prisma.transaction.count({ where: { status: TransactionStatus.ACTIVE, type: TransactionType.BORROWING } }),
+      prisma.transaction.count({
         where: {
-          status: 'ACTIVE',
+          status: TransactionStatus.ACTIVE,
+          type: TransactionType.BORROWING,
           expectedReturnDate: { lt: new Date() }
         }
       }),
-      // Count items with damaged condition
       prisma.item.count({
         where: { condition: 'DAMAGED' }
       }),
-      // Count borrowing items returned with damaged condition
-      prisma.borrowingItem.count({
+      prisma.transactionItem.aggregate({
+        _sum: { damagedQuantity: true },
+      }),
+      prisma.transactionItem.aggregate({
         where: {
-          condition: 'DAMAGED',
-          status: 'RETURNED'
+          transaction: {
+            type: TransactionType.REQUEST,
+            createdAt: {
+              gte: new Date(new Date().setDate(new Date().getDate() - 30))
+            }
+          }
+        },
+        _sum: {
+          quantity: true
         }
+      }),
+      // Get low stock items
+      prisma.item.findMany({
+        where: {
+          stock: {
+            lt: prisma.item.fields.minStock
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+          minStock: true
+        },
+        take: 5
       })
     ])
 
     // Calculate average borrowing duration manually
-    const returnedBorrowings = await prisma.borrowing.findMany({
+    const returnedBorrowings = await prisma.transaction.findMany({
       where: {
-        status: 'RETURNED',
+        status: TransactionStatus.RETURNED,
+        type: TransactionType.BORROWING,
         returnDate: { not: null }
       },
       select: {
-        borrowDate: true,
+        createdAt: true,
         returnDate: true
       }
     })
@@ -152,7 +182,7 @@ export async function GET(_request: NextRequest) {
     const avgBorrowingDuration = returnedBorrowings.length > 0
       ? returnedBorrowings.reduce((sum, borrowing) => {
           if (borrowing.returnDate) {
-            const duration = Math.ceil((borrowing.returnDate.getTime() - borrowing.borrowDate.getTime()) / (1000 * 60 * 60 * 24))
+            const duration = Math.ceil((borrowing.returnDate.getTime() - borrowing.createdAt.getTime()) / (1000 * 60 * 60 * 24))
             return sum + duration
           }
           return sum
@@ -160,17 +190,14 @@ export async function GET(_request: NextRequest) {
       : 0
 
     // Calculate totalTools and totalMaterials
-    const totalTools = categoryDistribution
-      .filter(cat => cat.type === 'TOOL')
-      .reduce((sum, cat) => sum + cat._count.items, 0);
-    const totalMaterials = categoryDistribution
-      .filter(cat => cat.type === 'MATERIAL')
-      .reduce((sum, cat) => sum + cat._count.items, 0);
+    const totalTools = await prisma.item.count({ where: { category: { type: CategoryType.TOOL } } })
+    const totalMaterials = await prisma.item.count({ where: { category: { type: CategoryType.MATERIAL } } })
 
     const analyticsData = {
+      lowStockItems,
       categoryDistribution: categoryData,
       mostBorrowedItems: borrowedItemsData,
-      monthlyBorrowingTrend: monthlyTrendData,
+      monthlyActivityTrend: monthlyActivityTrendData,
       summary: {
         totalItems,
         totalTools,
@@ -179,7 +206,8 @@ export async function GET(_request: NextRequest) {
         activeBorrowings,
         overdueBorrowings,
         damagedItems,
-        damagedReturns,
+        damagedReturns: damagedReturnsResult._sum.damagedQuantity || 0,
+        materialsUsedLastMonth: materialsUsedLastMonth._sum.quantity || 0,
         avgBorrowingDuration: Math.round(avgBorrowingDuration * 100) / 100,
         returnRate: totalBorrowings > 0 ? Math.round(((totalBorrowings - activeBorrowings) / totalBorrowings) * 100) : 0
       }

@@ -765,69 +765,133 @@ const ReturnForm = ({ transaction, onClose, onSuccess }: {
   onClose: () => void
   onSuccess: () => void
 }) => {
-  const { success, error } = useNotifications()
+  const { success, error, warning } = useNotifications()
   const [isLoading, setIsLoading] = useState(false)
   const [notes, setNotes] = useState('')
+  const [itemReturns, setItemReturns] = useState<any[]>(() => 
+    transaction.items?.map(item => ({
+      transactionItemId: item.id,
+      itemName: item.item?.name || 'Unknown Item',
+      maxQuantity: item.quantity - (item.returnedQuantity || 0),
+      returnQuantity: item.quantity - (item.returnedQuantity || 0),
+      damagedQuantity: 0,
+      lostQuantity: 0,
+    })) || []
+  )
+
+  const handleQuantityChange = (index: number, field: 'returnQuantity' | 'damagedQuantity' | 'lostQuantity', value: number) => {
+    const newItems = [...itemReturns]
+    const item = newItems[index]
+    const newValue = Math.max(0, Math.min(value, item.maxQuantity))
+    
+    const otherQuantities = (field === 'returnQuantity' ? item.damagedQuantity + item.lostQuantity : 
+                           field === 'damagedQuantity' ? item.returnQuantity + item.lostQuantity : 
+                           item.returnQuantity + item.damagedQuantity)
+
+    if (newValue + otherQuantities > item.maxQuantity) {
+      warning(`Total kuantitas untuk ${item.itemName} tidak boleh melebihi ${item.maxQuantity}`)
+      return
+    }
+
+    newItems[index] = { ...item, [field]: newValue }
+    setItemReturns(newItems)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+
+    const totalToReturn = itemReturns.reduce((acc, item) => acc + item.returnQuantity + item.damagedQuantity + item.lostQuantity, 0);
+    if (totalToReturn === 0) {
+        warning('Tidak ada barang yang ditandai untuk dikembalikan.');
+        return;
+    }
+
+    setIsLoading(true);
 
     try {
-      // Prepare items data for return
-      const items = transaction.items?.map(item => ({
-        transactionItemId: item.id,
-        returnQuantity: item.quantity - (item.returnedQuantity || 0), // Return all remaining quantity
-        damagedQuantity: 0,
-        lostQuantity: 0,
-        condition: 'GOOD',
-        returnNotes: notes
-      })) || []
+        const itemsToSubmit = itemReturns
+            .filter(item => item.returnQuantity > 0 || item.damagedQuantity > 0 || item.lostQuantity > 0)
+            .map(item => ({
+                transactionItemId: item.transactionItemId,
+                returnQuantity: item.returnQuantity,
+                damagedQuantity: item.damagedQuantity,
+                lostQuantity: item.lostQuantity,
+                condition: item.damagedQuantity > 0 ? ItemCondition.DAMAGED : ItemCondition.GOOD,
+                returnNotes: notes
+            }));
 
-      const response = await fetch(`/api/transactions/${transaction.id}/return`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, notes })
-      })
+        const response = await fetch(`/api/transactions/${transaction.id}/return`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: itemsToSubmit, notes })
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Gagal mengembalikan tool')
-      }
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Gagal mengembalikan tool');
+        }
 
-      success('Tool berhasil dikembalikan')
-      onSuccess()
+        success('Tool berhasil dikembalikan');
+        onSuccess();
     } catch (err) {
-      console.error('Error returning tool:', err)
-      error('Gagal mengembalikan tool', err instanceof Error ? err.message : undefined)
+        console.error('Error returning tool:', err);
+        error('Gagal mengembalikan tool', err instanceof Error ? err.message : undefined);
     } finally {
-      setIsLoading(false)
+        setIsLoading(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-blue-50 p-4 rounded-lg">
         <h3 className="font-medium text-blue-900 mb-2">Detail Peminjaman</h3>
         <div className="space-y-1 text-sm text-blue-700">
           <p><strong>Peminjam:</strong> {transaction.requesterName}</p>
           <p><strong>Tujuan:</strong> {transaction.purpose}</p>
-          <p><strong>Tanggal Pinjam:</strong> {formatDate(transaction.createdAt)}</p>
-          {transaction.expectedReturnDate && (
-            <p><strong>Jadwal Kembali:</strong> {formatDate(transaction.expectedReturnDate)}</p>
-          )}
         </div>
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h4 className="font-medium text-gray-900 mb-2">Items yang Dikembalikan</h4>
-        <div className="space-y-1">
-          {transaction.items?.map((item, index) => (
-            <div key={index} className="text-sm text-gray-700">
-              • {item.item?.name} (Qty: {item.quantity})
+      <div className="space-y-4">
+        <h4 className="font-medium text-gray-900 mb-2">Detail Pengembalian</h4>
+        {itemReturns.map((item, index) => (
+          <div key={item.transactionItemId} className="bg-gray-50 p-4 rounded-lg space-y-3">
+            <div className="font-medium text-gray-800">{item.itemName}</div>
+            <div className="text-sm text-gray-600">Maks. Kuantitas: {item.maxQuantity}</div>
+            
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Baik</label>
+                <Input
+                  type="number"
+                  value={item.returnQuantity}
+                  onChange={(e) => handleQuantityChange(index, 'returnQuantity', parseInt(e.target.value, 10))}
+                  min={0}
+                  max={item.maxQuantity}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Rusak</label>
+                <Input
+                  type="number"
+                  value={item.damagedQuantity}
+                  onChange={(e) => handleQuantityChange(index, 'damagedQuantity', parseInt(e.target.value, 10))}
+                  min={0}
+                  max={item.maxQuantity}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Hilang</label>
+                <Input
+                  type="number"
+                  value={item.lostQuantity}
+                  onChange={(e) => handleQuantityChange(index, 'lostQuantity', parseInt(e.target.value, 10))}
+                  min={0}
+                  max={item.maxQuantity}
+                />
+              </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
       <div className="space-y-2">
