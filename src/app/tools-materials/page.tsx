@@ -120,8 +120,6 @@ const ContextualSidebar = ({
   isLoading: boolean;
 }) => {
   if (!sidebar.isOpen) return null;
-
-  const _isEditMode = sidebar.panel === 'edit-item';
   const panelTitle = {
     'add-item': 'Tambah Item Baru',
     'edit-item': 'Edit Item',
@@ -1308,7 +1306,11 @@ const InventoryPage: React.FC = () => {
         openSidebar('transaction', { items: selectedItemsData } as { items: Item[] })
         break
       case 'bulk-edit':
-        // Handle bulk edit logic
+        if (selectedItemsData.length === 1) {
+          openSidebar('edit-item', selectedItemsData[0])
+        } else {
+          warning('Aksi tidak valid', 'Pilih satu item untuk diedit.')
+        }
         break
       case 'delete':
         handleBulkDelete()
@@ -1676,6 +1678,7 @@ const InventoryPage: React.FC = () => {
 
         {/* Contextual Sidebar */}
         <ContextualSidebar
+          key={sidebar.panel}
           sidebar={sidebar}
           onClose={closeSidebar}
           openSidebar={openSidebar}

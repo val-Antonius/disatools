@@ -194,17 +194,17 @@ const ReportsContent: React.FC = () => {
         case 'all-activities':
           reportTitle = 'All Activities Report'
           headers = ['Date', 'User', 'Activity', 'Item', 'Category', 'Details']
-          preparedData = result.data.map(prepareActivityDataForExport)
+          preparedData = prepareActivityDataForExport(result.data)
           break
         case 'tools':
           reportTitle = 'Tools Borrowing Report'
           headers = ['Borrower', 'Item', 'Category', 'Borrow Date', 'Return Date', 'Status']
-          preparedData = result.data.map(prepareBorrowingDataForExport)
+          preparedData = prepareBorrowingDataForExport(result.data)
           break
         case 'materials':
           reportTitle = 'Materials Usage Report'
           headers = ['Requester', 'Item', 'Category', 'Request Date', 'Quantity', 'Status']
-          preparedData = result.data.map(prepareBorrowingDataForExport)
+          preparedData = prepareBorrowingDataForExport(result.data)
           break
         case 'conditions-damage-utilization':
           reportTitle = 'Item Condition & Utilization Report'

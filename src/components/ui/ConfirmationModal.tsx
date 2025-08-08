@@ -1,9 +1,8 @@
 'use client'
 
-import React from 'react'
-import Modal from './Modal'
-import Button from './Button'
 import { AlertTriangle } from 'lucide-react'
+import Button from './Button'
+import Modal from './Modal'
 
 interface ConfirmationModalProps {
   isOpen: boolean
@@ -13,8 +12,8 @@ interface ConfirmationModalProps {
   message: string
   confirmText?: string
   cancelText?: string
-  variant?: 'danger' | 'warning' | 'info'
   isLoading?: boolean
+  variant?: 'danger' | 'warning' | 'info'
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -25,70 +24,55 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   message,
   confirmText = 'Konfirmasi',
   cancelText = 'Batal',
+  isLoading = false,
   variant = 'warning',
-  isLoading = false
 }) => {
-  const getVariantStyles = () => {
-    switch (variant) {
-      case 'danger':
-        return {
-          iconColor: 'text-red-600',
-          bgColor: 'bg-red-50',
-          borderColor: 'border-red-200',
-          buttonVariant: 'danger' as const
-        }
-      case 'warning':
-        return {
-          iconColor: 'text-yellow-600',
-          bgColor: 'bg-yellow-50',
-          borderColor: 'border-yellow-200',
-          buttonVariant: 'secondary' as const
-        }
-      case 'info':
-        return {
-          iconColor: 'text-blue-600',
-          bgColor: 'bg-blue-50',
-          borderColor: 'border-blue-200',
-          buttonVariant: 'primary' as const
-        }
-    }
-  }
-
-  const styles = getVariantStyles()
+  const styles = {
+    danger: {
+      iconColor: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200',
+      buttonVariant: 'danger' as const,
+    },
+    warning: {
+      iconColor: 'text-yellow-600',
+      bgColor: 'bg-yellow-50',
+      borderColor: 'border-yellow-200',
+      buttonVariant: 'secondary' as const,
+    },
+    info: {
+      iconColor: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-200',
+      buttonVariant: 'primary' as const,
+    },
+  }[variant]
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="p-8 sm:p-10 bg-white rounded-2xl shadow-2xl max-w-md w-full">
-        <div className={`flex items-start space-x-4 p-4 rounded-xl border ${styles.bgColor} ${styles.borderColor} mb-6`}>
-          <AlertTriangle className={`h-8 w-8 ${styles.iconColor} flex-shrink-0 mt-1`} />
-          <div className="flex-1">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {title}
-            </h3>
-            <p className="text-base text-gray-700 break-words">
-              {message}
-            </p>
-          </div>
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <div
+        className={`flex items-start space-x-4 ${styles.bgColor} ${styles.borderColor} border rounded-lg p-4 mb-6`}
+      >
+        <AlertTriangle className={`h-8 w-8 ${styles.iconColor} flex-shrink-0 mt-1`} />
+        <div className="flex-1">
+          <p className="text-base text-gray-700 break-words">{message}</p>
         </div>
-        <div className="flex justify-end space-x-3 mt-8">
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            disabled={isLoading}
-          >
-            {cancelText}
-          </Button>
-          <Button
-            variant={styles.buttonVariant}
-            onClick={onConfirm}
-            loading={isLoading}
-          >
-            {confirmText}
-          </Button>
-        </div>
+      </div>
+
+      <div className="flex justify-end space-x-3 mt-6">
+        <Button variant="ghost" onClick={onClose} disabled={isLoading}>
+          {cancelText}
+        </Button>
+        <Button
+          variant={styles.buttonVariant}
+          onClick={onConfirm}
+          loading={isLoading}
+        >
+          {confirmText}
+        </Button>
       </div>
     </Modal>
   )
 }
 
-export default ConfirmationModal 
+export default ConfirmationModal

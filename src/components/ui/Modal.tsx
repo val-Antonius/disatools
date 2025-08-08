@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { X } from 'lucide-react'
@@ -20,7 +22,7 @@ const Modal: React.FC<ModalProps> = ({
   children,
   size = 'md',
   showCloseButton = true,
-  overlayClassName
+  overlayClassName,
 }) => {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -46,27 +48,25 @@ const Modal: React.FC<ModalProps> = ({
     sm: 'max-w-md',
     md: 'max-w-lg',
     lg: 'max-w-2xl',
-    xl: 'max-w-4xl'
+    xl: 'max-w-4xl',
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto animate-fade-in">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-[9999] overflow-y-auto animate-fade-in">
+      {/* Overlay */}
       <div
         className={cn(
-          'fixed inset-0 bg-gray-900 bg-opacity-20 backdrop-blur-sm transition-opacity duration-300',
+          'fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300',
           overlayClassName
         )}
         onClick={onClose}
       />
 
-      {/* Modal */}
+      {/* Modal Container */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div
           className={cn(
-            'relative w-full transform rounded-xl bg-white shadow-xl transition-all duration-300',
-            'backdrop-blur-md bg-white/98 border border-gray-200/50 shadow-2xl',
-            'animate-slide-up',
+            'relative w-full transform rounded-xl bg-white shadow-2xl transition-all duration-300',
             sizes[size]
           )}
           onClick={(e) => e.stopPropagation()}
@@ -92,7 +92,7 @@ const Modal: React.FC<ModalProps> = ({
             </div>
           )}
 
-          {/* Content */}
+          {/* Content - biarkan children sepenuhnya mengontrol isi */}
           <div className="px-6 py-4">
             {children}
           </div>
